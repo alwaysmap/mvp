@@ -1,0 +1,42 @@
+/**
+ * CSS variables for easy theme customization.
+ * These can be overridden in any parent component or page.
+ */
+
+:root {
+	/* Canvas background - antique parchment for print testing */
+	--map-canvas-bg: #f4ebe1;
+
+	/* Ocean color */
+	--map-ocean: #d4e4e8;
+
+	/* Land colors */
+	--map-land: #e8dfd0;
+	--map-land-stroke: #c5b8a5;
+	--map-country-border: #b5a892;
+
+	/* Graticule */
+	--map-graticule: #d4cbbf;
+
+	/* Text colors */
+	--map-title-text: #2b2520;
+	--map-subtitle-text: #5a4f47;
+	--map-label-text: #6e6158;
+	--map-attribution-text: #9b8f82;
+}
+
+/**
+ * Example: Override colors on a specific page
+ *
+ * .modern-theme {
+ *   --map-canvas-bg: #ffffff;
+ *   --map-ocean: #e8f4f8;
+ *   --map-land: #f5f3ed;
+ * }
+ *
+ * .dark-theme {
+ *   --map-canvas-bg: #1a1a1a;
+ *   --map-ocean: #2a3f4f;
+ *   --map-land: #3a3a3a;
+ * }
+ */

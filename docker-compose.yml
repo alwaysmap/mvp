@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./static:/app/static
+    environment:
+      REDIS_URL: redis://redis:6379
+      GCS_BUCKET: family-maps
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
+      PRINTFUL_API_KEY: ${PRINTFUL_API_KEY}
+    command: pnpm dev --host 0.0.0.0
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      REDIS_URL: redis://redis:6379
+      GCS_BUCKET: family-maps
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
+      PRINTFUL_API_KEY: ${PRINTFUL_API_KEY}
+      RENDER_BASE_URL: http://app:5173
+    volumes:
+      - ./gcp-credentials.json:/app/gcp-credentials.json:ro
+    depends_on:
+      - app
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
