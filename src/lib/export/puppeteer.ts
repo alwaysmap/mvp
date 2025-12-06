@@ -111,7 +111,7 @@ export async function exportMapToPNG(
 		console.log('✓ Render complete');
 
 		// Extra wait for final paint and font settling
-		await page.waitForTimeout(2000);
+		await new Promise(resolve => setTimeout(resolve, 2000));
 
 		// Verify fonts are loaded
 		console.log('🔤 Verifying fonts...');

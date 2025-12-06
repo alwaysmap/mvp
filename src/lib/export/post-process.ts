@@ -4,8 +4,6 @@
  */
 
 import sharp from 'sharp';
-import fs from 'fs';
-import path from 'path';
 
 /**
  * Embeds sRGB ICC profile into a PNG buffer.
@@ -21,22 +19,11 @@ import path from 'path';
 export async function embedSRGBProfile(pngBuffer: Buffer): Promise<Buffer> {
 	console.log('🎨 Embedding sRGB ICC profile...');
 
-	// Load sRGB ICC profile from disk
-	const profilePath = path.join(process.cwd(), 'profiles', 'sRGB2014.icc');
-
-	if (!fs.existsSync(profilePath)) {
-		throw new Error(`sRGB ICC profile not found at: ${profilePath}`);
-	}
-
-	const srgbProfile = fs.readFileSync(profilePath);
-
-	console.log('   Profile size:', Buffer.byteLength(srgbProfile), 'bytes');
-
-	// Process with Sharp
+	// Use Sharp's built-in sRGB profile
+	// Sharp includes srgb, p3, and cmyk profiles built-in
+	// See: https://sharp.pixelplumbing.com/api-output#withiccprofile
 	const processed = await sharp(pngBuffer)
-		.withMetadata({
-			icc: srgbProfile
-		})
+		.withIccProfile('srgb') // Use built-in sRGB profile
 		.png({
 			compressionLevel: 9, // Maximum compression (slower but smaller file)
 			quality: 100 // Maximum quality

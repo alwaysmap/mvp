@@ -1,0 +1,57 @@
+{
+  "title": "Our Family Journey",
+  "subtitle": "2010-2024",
+  "people": [
+    {
+      "id": "alice",
+      "name": "Alice",
+      "color": "#FF6B6B",
+      "locations": [
+        {
+          "countryCode": "US",
+          "longitude": -74.006,
+          "latitude": 40.7128,
+          "date": "2010-01-01"
+        },
+        {
+          "countryCode": "GB",
+          "longitude": -0.1276,
+          "latitude": 51.5074,
+          "date": "2015-06-15"
+        },
+        {
+          "countryCode": "JP",
+          "longitude": 139.6917,
+          "latitude": 35.6895,
+          "date": "2020-03-20"
+        }
+      ]
+    },
+    {
+      "id": "bob",
+      "name": "Bob",
+      "color": "#4ECDC4",
+      "locations": [
+        {
+          "countryCode": "CA",
+          "longitude": -79.3832,
+          "latitude": 43.6532,
+          "date": "2012-05-10"
+        },
+        {
+          "countryCode": "FR",
+          "longitude": 2.3522,
+          "latitude": 48.8566,
+          "date": "2016-08-22"
+        },
+        {
+          "countryCode": "AU",
+          "longitude": 151.2093,
+          "latitude": -33.8688,
+          "date": "2021-11-15"
+        }
+      ]
+    }
+  ],
+  "rotation": [-20, -30, 0]
+}
