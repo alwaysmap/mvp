@@ -6,77 +6,106 @@ These are the areas most likely to cause customer disappointment if the print do
 
 ---
 
-## 🔴 HIGH RISK: Font Rendering Differences
+## 🔴 HIGH RISK: Font Rendering Consistency (CLARIFIED)
 
-### Problem
-Fonts render differently between:
-- Browser (screen DPI, hinting enabled)
-- Puppeteer (headless Chrome, different rendering engine)
-- Final print (300 DPI, professional output)
+### The Real Issue
 
-### Specific Concerns
+**All text is SVG `<text>` elements** - this is not a problem, it's the correct approach:
+- Map title (user input) → SVG `<text>`
+- Country labels → SVG `<text>`
+- Location annotations ("Alice Waters, 1903") → SVG `<text>`
+- QR code is paths (not text)
 
-**1. Font metrics change between screen and print**
-- Browser renders at 96 DPI with subpixel antialiasing
-- Print is 300 DPI with different antialiasing
-- Letter spacing, line height might differ
-- Title block could be different size → layout shifts
+**The actual risk**: Browser preview vs Puppeteer export might render SVG `<text>` differently.
 
-**2. Font loading timing**
-- Current code waits for fonts with `document.fonts.check()`
-- But does Puppeteer load fonts identically to browser?
-- What if font file versions differ?
-- Fallback fonts would be catastrophic
+### Why This Might Happen
 
-**3. SVG text rendering differences**
-- SVG `<text>` elements use browser's text engine
-- Chrome, Firefox, Safari all render slightly differently
-- Puppeteer uses Chrome, but what version?
-- Customer might preview in Safari, screenshot in Puppeteer Chrome
+**1. Font loading verification**
+- Browser: Fonts load via CSS `@font-face`, verified with `document.fonts.check()`
+- Puppeteer: Same fonts, same verification
+- **Risk**: Timing - what if Puppeteer screenshots before fonts fully load?
+- **Mitigation**: Our current code already waits for fonts (✅ should work)
 
-### Open Questions
+**2. SVG text rendering engine differences**
+- User previews in Safari/Firefox/Chrome on their machine
+- Puppeteer uses specific Chrome version for screenshot
+- Different browsers render SVG `<text>` slightly differently (letter-spacing, kerning)
+- **Risk**: Preview in Safari, export in Puppeteer Chrome → looks different
+- **Mitigation**: Accept minor differences OR tell users to preview in Chrome
 
-❓ **Q1**: Should we convert all text to `<path>` elements before export?
-- **Pro**: Guaranteed identical rendering (vectors, not fonts)
-- **Con**: No longer selectable text, larger file size
-- **Decision needed**: Is exactness worth losing text semantics?
+**3. Subpixel rendering**
+- Screen: 96 DPI with subpixel antialiasing (looks crisp)
+- Export: 300 DPI, then printed (no subpixel rendering)
+- **Risk**: Text looks "different" but not wrong
+- **Mitigation**: This is expected, not a bug
 
-❓ **Q2**: How do we validate font rendering matches?
-- Can we screenshot browser preview AND Puppeteer output?
-- Compare pixel-by-pixel to detect differences?
-- Set tolerance threshold (e.g., 99.9% match)?
+### Revised Understanding
 
-❓ **Q3**: What's our font loading verification strategy?
-- Current: check 4 fonts are available
-- Sufficient? Need to verify exact font files loaded?
-- Should we embed fonts in SVG as base64?
+**User's concern was**: "Can I type text in a form and have it show up correctly in D3/Svelte SVG?"
+
+**Answer**: Yes, absolutely:
+```svelte
+<script>
+  let userTitle = $state("Our Family Journey");
+</script>
+
+<svg>
+  <text x="100" y="50" font-family="Cormorant Garamond">
+    {userTitle}
+  </text>
+</svg>
+```
+
+This works perfectly. D3 and Svelte both produce SVG `<text>` elements. No conversion needed.
+
+### Real Open Questions
+
+❓ **Q1 (REVISED)**: Should we require Chrome for preview?
+- **Option A**: Support all browsers, accept minor rendering differences
+- **Option B**: Show warning: "For best accuracy, preview in Chrome"
+- **Recommendation**: Option A - differences will be negligible
+
+❓ **Q2 (REVISED)**: Font loading verification sufficient?
+- Current: Wait for `document.fonts.check()` to return true
+- Add: Extra 2-second wait after fonts load (already doing this)
+- **Recommendation**: Current approach is solid
+
+❓ **Q3 (REVISED)**: How to test font rendering consistency?
+```typescript
+test('fonts render identically in preview and export', async ({ page }) => {
+  // Render in browser
+  await page.goto('/configure-print');
+  const previewText = await page.locator('text[class="title"]').textContent();
+
+  // Render in Puppeteer
+  await page.goto('/render?data=...');
+  await page.waitForFunction(() => window.__RENDER_READY__);
+  const exportText = await page.locator('text[class="title"]').textContent();
+
+  // Text content should match
+  expect(previewText).toBe(exportText);
+
+  // Visual regression test (optional)
+  await expect(page).toHaveScreenshot('title-block.png');
+});
+```
 
 ### Proposed Solution
 
-**Option A: Text-to-Path Conversion** (Safest)
-```typescript
-// Before export, convert all text to paths
-function convertTextToPaths(svg: SVGSVGElement): void {
-  svg.querySelectorAll('text').forEach(textElement => {
-    const pathData = textElementToPathData(textElement);
-    const pathElement = createPathFromData(pathData);
-    textElement.parentNode.replaceChild(pathElement, textElement);
-  });
-}
-```
-- ✅ Guaranteed identical rendering
-- ✅ No font loading issues
-- ❌ Larger SVG file
-- ❌ Lose text accessibility
+**Just use SVG `<text>` elements everywhere** (current approach):
+- User input → Svelte bindings → SVG `<text>`
+- D3 labels → D3's `text()` → SVG `<text>`
+- Font loading verification ensures fonts are ready
+- Accept minor browser differences as negligible
 
-**Option B: Strict Font Verification** (More fragile)
-- Verify exact font file checksums match
-- Screenshot comparison with pixel diff
-- Fail export if mismatch detected
-- ✅ Keeps text as text
-- ❌ More points of failure
+**No text-to-path conversion needed** - that was overthinking it.
 
-**Recommendation**: Start with Option B (verification), keep Option A as fallback if issues arise.
+**Testing strategy**:
+1. E2E test verifying text content matches
+2. Visual regression test for major UI elements
+3. Actual print sample to validate quality
+
+**Recommendation**: Keep current approach, add E2E test for font loading.
 
 ---
 
@@ -237,9 +266,10 @@ Our layout engine calculates exact pixel positions for furniture. If calculation
 ### Open Questions
 
 ❓ **Q10**: Should layout calculation be deterministic pure function?
-- No `getBBox()` or other DOM measurements
-- Pre-compute font dimensions from metrics?
-- Store expected dimensions in constants?
+- **Decision**: Start simple - use DOM measurements (`getBBox()`) for now
+- User needs ability to tweak map zoom/center/rotation
+- Can optimize for purity later if we see inconsistency issues
+- **Recommendation**: Pragmatic approach, measure then optimize
 
 ❓ **Q11**: How do we validate layout consistency?
 - Same input → same output (unit test)
@@ -309,7 +339,8 @@ We render SVG at 300 DPI (e.g., 5475×7275px), then scale down for browser previ
 ❓ **Q13**: CSS transform or SVG viewBox for scaling?
 - `transform: scale(0.15)` - CSS, might be faster
 - `viewBox="0 0 5475 7275" width="800"` - SVG native, might be crisper
-- Which is better for preview quality?
+- **Decision**: Needs experimentation - try both, measure performance and visual quality
+- **Recommendation**: Start with one, A/B test if issues arise
 
 ❓ **Q14**: Do we need two SVG sizes?
 - Preview: Render at screen resolution (800×1066px)
