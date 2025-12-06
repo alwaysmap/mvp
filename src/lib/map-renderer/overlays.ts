@@ -16,6 +16,7 @@ import QRCode from 'qrcode';
  * @param title - Main title text
  * @param subtitle - Subtitle text
  * @param safeArea - Safe area boundaries (x, y, width, height in points)
+ * @param layoutOverride - Optional layout-calculated position and size (from layout engine)
  *
  * @example
  * ```typescript
@@ -29,10 +30,25 @@ export function renderTitleBox(
 	svg: Selection<any, any, any, any>,
 	title: string,
 	subtitle: string,
-	safeArea: { x: number; y: number; width: number; height: number }
+	safeArea: { x: number; y: number; width: number; height: number },
+	layoutOverride?: { x: number; y: number; width: number; height: number }
 ): void {
-	const boxWidth = 400;
-	const boxHeight = 100;
+	let boxX: number, boxY: number, boxWidth: number, boxHeight: number;
+
+	if (layoutOverride) {
+		// Use layout engine calculations for optimal positioning
+		boxX = layoutOverride.x;
+		boxY = layoutOverride.y;
+		boxWidth = layoutOverride.width;
+		boxHeight = layoutOverride.height;
+	} else {
+		// Legacy behavior: top-left corner
+		boxX = safeArea.x;
+		boxY = safeArea.y;
+		boxWidth = 400;
+		boxHeight = 100;
+	}
+
 	const padding = 20;
 	const cornerRadius = 4;
 
@@ -41,8 +57,8 @@ export function renderTitleBox(
 
 	// Background rectangle
 	g.append('rect')
-		.attr('x', safeArea.x)
-		.attr('y', safeArea.y)
+		.attr('x', boxX)
+		.attr('y', boxY)
 		.attr('width', boxWidth)
 		.attr('height', boxHeight)
 		.attr('rx', cornerRadius)
@@ -53,8 +69,8 @@ export function renderTitleBox(
 
 	// Title text (larger, bold)
 	g.append('text')
-		.attr('x', safeArea.x + padding)
-		.attr('y', safeArea.y + padding + 24) // Baseline position
+		.attr('x', boxX + padding)
+		.attr('y', boxY + padding + 24) // Baseline position
 		.style('font-family', 'Cormorant Garamond')
 		.style('font-size', '28px')
 		.style('font-weight', '700') // Bold
@@ -63,8 +79,8 @@ export function renderTitleBox(
 
 	// Subtitle text (smaller, regular weight)
 	g.append('text')
-		.attr('x', safeArea.x + padding)
-		.attr('y', safeArea.y + padding + 24 + 32) // Below title
+		.attr('x', boxX + padding)
+		.attr('y', boxY + padding + 24 + 32) // Below title
 		.style('font-family', 'DM Sans')
 		.style('font-size', '16px')
 		.style('font-weight', '400') // Regular
@@ -82,6 +98,7 @@ export function renderTitleBox(
  * @param url - URL to encode in the QR code (default: https://alwaysmap.com)
  * @param safeArea - Safe area boundaries (x, y, width, height in points)
  * @param size - Size of the QR code in points (default: 100)
+ * @param layoutOverride - Optional layout-calculated position and size (from layout engine)
  *
  * @example
  * ```typescript
@@ -95,7 +112,8 @@ export async function renderQRCode(
 	svg: Selection<any, any, any, any>,
 	url: string = 'https://alwaysmap.com',
 	safeArea: { x: number; y: number; width: number; height: number },
-	size: number = 100
+	size: number = 100,
+	layoutOverride?: { x: number; y: number; width: number; height: number }
 ): Promise<void> {
 	// Generate QR code as SVG string
 	const qrSvg = await QRCode.toString(url, {
@@ -133,20 +151,32 @@ export async function renderQRCode(
 		? viewBox.split(' ').map(Number)
 		: [0, 0, size, size];
 
-	// Position in bottom-right corner with padding
-	const padding = 20;
-	const qrX = safeArea.x + safeArea.width - size - padding;
-	const qrY = safeArea.y + safeArea.height - size - padding;
+	let qrX: number, qrY: number, qrSize: number;
+
+	if (layoutOverride) {
+		// Use layout engine calculations for optimal positioning
+		qrX = layoutOverride.x;
+		qrY = layoutOverride.y;
+		qrSize = layoutOverride.width; // Assume square
+	} else {
+		// Legacy behavior: bottom-right corner with padding
+		const padding = 20;
+		qrX = safeArea.x + safeArea.width - size - padding;
+		qrY = safeArea.y + safeArea.height - size - padding;
+		qrSize = size;
+	}
 
 	// Create group for QR code
 	const g = svg.append('g').attr('class', 'qr-code').attr('transform', `translate(${qrX}, ${qrY})`);
+
+	const padding = 20;
 
 	// White background rectangle
 	g.append('rect')
 		.attr('x', -padding / 2)
 		.attr('y', -padding / 2)
-		.attr('width', size + padding)
-		.attr('height', size + padding)
+		.attr('width', qrSize + padding)
+		.attr('height', qrSize + padding)
 		.attr('fill', '#FFFFFF')
 		.attr('rx', 4)
 		.attr('ry', 4);
@@ -154,7 +184,7 @@ export async function renderQRCode(
 	// Create a nested group for the QR code with proper scaling
 	const qrGroup = g
 		.append('g')
-		.attr('transform', `scale(${size / vbWidth})`);
+		.attr('transform', `scale(${qrSize / vbWidth})`);
 
 	// Add QR code paths - need to preserve both fill AND stroke attributes
 	paths.forEach((path) => {
@@ -182,8 +212,8 @@ export async function renderQRCode(
 
 	// Optional: Add small text label below QR code
 	g.append('text')
-		.attr('x', size / 2)
-		.attr('y', size + padding + 12)
+		.attr('x', qrSize / 2)
+		.attr('y', qrSize + padding + 12)
 		.style('font-family', 'DM Sans')
 		.style('font-size', '10px')
 		.style('font-weight', '400')

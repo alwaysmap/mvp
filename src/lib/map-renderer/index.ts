@@ -29,6 +29,8 @@ import {
 	styleMarker,
 	getPersonColor
 } from './styles.js';
+import { calculateLayout } from '../layout/index.js';
+import type { UserMapData } from '../layout/types.js';
 
 /**
  * Main rendering function - framework-agnostic.
@@ -131,8 +133,32 @@ export async function renderMap(
 			.attr('viewBox', `0 0 ${dimensions.totalWidth} ${dimensions.totalHeight}`)
 			.style('background-color', options.backgroundColor || colors.canvasBackground);
 
+		// Step 4.5: Calculate layout if provided
+		let layoutResult;
+		if (mapDef.layout) {
+			// Convert MapDefinition to UserMapData for layout engine
+			const userData: UserMapData = {
+				people: mapDef.people,
+				view: {
+					projection: 'orthographic',
+					rotation: mapDef.rotation || [0, 0, 0]
+				}
+			};
+
+			layoutResult = calculateLayout(userData, mapDef.layout);
+			console.log('✓ Layout calculated:', {
+				mapSize: `${layoutResult.map.width.toFixed(0)}×${layoutResult.map.height.toFixed(0)}pt`,
+				fill: `${layoutResult.fillPercentage.toFixed(1)}%`,
+				scale: layoutResult.map.scale.toFixed(0)
+			});
+		}
+
 		// Step 5: Create projection and path generator
-		const projection = createProjection(dimensions, mapDef.rotation);
+		const projection = createProjection(
+			dimensions,
+			mapDef.rotation,
+			layoutResult ? { center: layoutResult.map.center, scale: layoutResult.map.scale } : undefined
+		);
 		const path = createGeoPath(projection);
 
 		console.log('✓ Projection created:', {
@@ -174,11 +200,23 @@ export async function renderMap(
 		}
 
 		// Step 8: Render title box
-		renderTitleBox(svg, mapDef.title, mapDef.subtitle, dimensions.safeArea);
+		renderTitleBox(
+			svg,
+			mapDef.title,
+			mapDef.subtitle,
+			dimensions.safeArea,
+			layoutResult?.furniture.title
+		);
 		console.log('✓ Title box rendered');
 
 		// Step 9: Render QR code
-		await renderQRCode(svg, 'https://alwaysmap.com', dimensions.safeArea);
+		await renderQRCode(
+			svg,
+			'https://alwaysmap.com',
+			dimensions.safeArea,
+			100,
+			layoutResult?.furniture.qrCode
+		);
 		console.log('✓ QR code rendered');
 
 		// Step 10: Render attribution

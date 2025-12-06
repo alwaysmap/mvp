@@ -15,6 +15,7 @@ import type { Dimensions } from './types.js';
  *
  * @param dimensions - Calculated dimensions for the print
  * @param rotation - Initial rotation [lambda, phi, gamma] in degrees (default: [0, 0, 0])
+ * @param layoutOverride - Optional layout-calculated center and scale (from layout engine)
  * @returns Configured D3 orthographic projection
  *
  * @example
@@ -25,16 +26,26 @@ import type { Dimensions } from './types.js';
  */
 export function createProjection(
 	dimensions: Dimensions,
-	rotation: [number, number, number] = [0, 0, 0]
+	rotation: [number, number, number] = [0, 0, 0],
+	layoutOverride?: { center: [number, number]; scale: number }
 ): GeoProjection {
-	// Center the projection in the trim area
-	const centerX = dimensions.bleed + dimensions.trimWidth / 2;
-	const centerY = dimensions.bleed + dimensions.trimHeight / 2;
+	let centerX: number, centerY: number, scale: number;
 
-	// Scale to fit within the trim area with some padding
-	// Use the smaller dimension to ensure the globe fits
-	const minDimension = Math.min(dimensions.trimWidth, dimensions.trimHeight);
-	const scale = (minDimension / 2) * 0.85; // 85% to leave some margin
+	if (layoutOverride) {
+		// Use layout engine calculations for optimal positioning
+		centerX = layoutOverride.center[0];
+		centerY = layoutOverride.center[1];
+		scale = layoutOverride.scale;
+	} else {
+		// Legacy behavior: center in trim area
+		centerX = dimensions.bleed + dimensions.trimWidth / 2;
+		centerY = dimensions.bleed + dimensions.trimHeight / 2;
+
+		// Scale to fit within the trim area with some padding
+		// Use the smaller dimension to ensure the globe fits
+		const minDimension = Math.min(dimensions.trimWidth, dimensions.trimHeight);
+		scale = (minDimension / 2) * 0.85; // 85% to leave some margin
+	}
 
 	return geoOrthographic()
 		.scale(scale)

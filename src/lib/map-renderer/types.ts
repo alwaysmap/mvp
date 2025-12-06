@@ -3,6 +3,8 @@
  * All dimensions are in points (pt), where 1 pt = 1/72 inch.
  */
 
+import type { PageLayout } from '../layout/types.js';
+
 /**
  * Represents a person's location at a specific point in time.
  */
@@ -43,6 +45,12 @@ export interface MapDefinition {
 	people: Person[];
 	/** Initial rotation of the globe [lambda, phi, gamma] in degrees */
 	rotation?: [number, number, number];
+	/**
+	 * Optional page layout configuration.
+	 * If not provided, uses default layout with hardcoded positioning (legacy behavior).
+	 * If provided, uses layout engine to calculate optimal positioning.
+	 */
+	layout?: PageLayout;
 }
 
 /**
