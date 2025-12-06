@@ -257,36 +257,45 @@ const PAGE_SIZES: Record<PageSize, { width: number; height: number }> = {
 ### 3. Furniture Definition (Page Decorations)
 
 ```typescript
+// Allowed furniture positions (UX constraint)
+type FurniturePosition =
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
+
 interface FurnitureConfig {
-  // Title block - positions calculated automatically by layout engine
+  // Title block
   title?: {
     text: string;
     subtitle?: string;
-    // Position is automatic: top-left, QR goes top-right
+    position: FurniturePosition; // User chooses from 4 options
   };
 
-  // QR code - position calculated automatically
+  // QR code
   qrCode?: {
     url: string;
-    // Position is automatic: top-right
-    // Size is automatic: calculated based on available space
+    position: FurniturePosition; // User chooses from 4 options
   };
 
-  // Legend (future) - position automatic
+  // Legend (future)
   legend?: {
     items: LegendItem[];
-    // Position calculated to not overlap with map
+    position: 'left' | 'right'; // User chooses side
   };
 
-  // Scale bar (future) - position automatic
+  // Scale bar (future)
   scaleBar?: {
     units: 'km' | 'miles';
-    // Position calculated based on available space
+    position: 'bottom-left' | 'bottom-right'; // User chooses corner
   };
 }
 
-// Note: User only provides CONTENT (text, URL), not positions.
-// Layout engine calculates all positions to maximize map fill.
+// UX Approach:
+// - User selects from constrained options (e.g., dropdown with 4 corners)
+// - Layout engine translates choice → exact pixel coordinates
+// - Ensures professional results, prevents collisions
+// - Gives user control without overwhelming them
 ```
 
 ### 4. Layout Result (Computed Positions)
@@ -431,6 +440,128 @@ function calculateProjectionScale(
 }
 ```
 
+### Helper: `positionFurniture()`
+
+```typescript
+function positionFurniture(
+  furniture: FurnitureConfig,
+  safeArea: { x: number; y: number; width: number; height: number },
+  mapDimensions: { width: number; height: number },
+  mapPosition: { x: number; y: number }
+): FurniturePositions {
+  const positions: FurniturePositions = {};
+  const margin = 20; // pixels from safe area edge
+
+  // Calculate title block position
+  if (furniture.title) {
+    const titleSize = measureTitleBlock(furniture.title); // Get actual text dimensions
+
+    positions.title = calculateCornerPosition(
+      furniture.title.position,
+      titleSize,
+      safeArea,
+      margin
+    );
+  }
+
+  // Calculate QR code position
+  if (furniture.qrCode) {
+    const qrSize = { width: 100, height: 100 }; // Standard QR size in pixels
+
+    positions.qrCode = calculateCornerPosition(
+      furniture.qrCode.position,
+      qrSize,
+      safeArea,
+      margin
+    );
+  }
+
+  // Validate no collisions between furniture items
+  validateFurnitureCollisions(positions);
+
+  return positions;
+}
+
+/**
+ * Translates semantic position (top-left, etc.) to exact pixel coordinates
+ */
+function calculateCornerPosition(
+  position: FurniturePosition,
+  itemSize: { width: number; height: number },
+  safeArea: { x: number; y: number; width: number; height: number },
+  margin: number
+): { x: number; y: number; width: number; height: number } {
+  const { x: safeX, y: safeY, width: safeW, height: safeH } = safeArea;
+
+  switch (position) {
+    case 'top-left':
+      return {
+        x: safeX + margin,
+        y: safeY + margin,
+        width: itemSize.width,
+        height: itemSize.height
+      };
+
+    case 'top-right':
+      return {
+        x: safeX + safeW - itemSize.width - margin,
+        y: safeY + margin,
+        width: itemSize.width,
+        height: itemSize.height
+      };
+
+    case 'bottom-left':
+      return {
+        x: safeX + margin,
+        y: safeY + safeH - itemSize.height - margin,
+        width: itemSize.width,
+        height: itemSize.height
+      };
+
+    case 'bottom-right':
+      return {
+        x: safeX + safeW - itemSize.width - margin,
+        y: safeY + safeH - itemSize.height - margin,
+        width: itemSize.width,
+        height: itemSize.height
+      };
+  }
+}
+
+/**
+ * Ensures furniture items don't overlap
+ */
+function validateFurnitureCollisions(positions: FurniturePositions): void {
+  // Check if title and QR code overlap
+  if (positions.title && positions.qrCode) {
+    const overlap = checkRectOverlap(positions.title, positions.qrCode);
+    if (overlap) {
+      throw new Error(
+        'Furniture collision: title and QR code overlap. ' +
+        'Choose different positions.'
+      );
+    }
+  }
+
+  // Future: Check other furniture items
+}
+
+/**
+ * Checks if two rectangles overlap
+ */
+function checkRectOverlap(
+  rect1: { x: number; y: number; width: number; height: number },
+  rect2: { x: number; y: number; width: number; height: number }
+): boolean {
+  return !(
+    rect1.x + rect1.width < rect2.x ||
+    rect2.x + rect2.width < rect1.x ||
+    rect1.y + rect1.height < rect2.y ||
+    rect2.y + rect2.height < rect1.y
+  );
+}
+```
+
 ## Rendering Pipeline
 
 ### Step 1: Layout Calculation (Pure Function)
@@ -539,6 +670,11 @@ function composePage(
 │                                                         │
 │  Title: [Our Family Journey_____________]              │
 │  Subtitle: [2010-2024___________________]              │
+│  Title Position: [Top Left ▼]  (options: Top Left,     │
+│                                  Top Right, Bottom      │
+│                                  Left, Bottom Right)    │
+│                                                         │
+│  QR Code Position: [Top Right ▼]                       │
 │                                                         │
 │  ┌────────────────────────────────────────────────┐    │
 │  │ ┌──────────────────────────────────────────┐   │    │
@@ -567,11 +703,15 @@ function composePage(
 **At this stage:**
 - User sees EXACT print preview in browser
 - Page boundaries visualized with overlays
-- Can change page size → preview updates instantly
-- Can change orientation → preview updates instantly
-- Can fine-tune map rotation → preview updates
-- Can edit title/subtitle TEXT → preview updates
-- **Furniture positions are automatic** - calculated by layout engine
+- User controls:
+  - Page size → preview updates instantly
+  - Orientation → preview updates instantly
+  - Title/subtitle TEXT → preview updates
+  - **Title position** (4 corner options) → preview updates
+  - **QR code position** (4 corner options) → preview updates
+  - Map rotation (fine-tune) → preview updates
+- Layout engine translates choices to exact pixel coordinates
+- Validates no furniture collisions (shows error if overlap)
 - **What they see IS what they'll get**
 
 **Key Implementation Detail:**
