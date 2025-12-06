@@ -181,35 +181,227 @@ src/lib/map-renderer/
 
 ## Data Model
 
-### 1. Map Definition (Geographic Content)
+## Three-Layer Data Model
+
+The design separates three distinct concerns:
+
+### (a) Map Style Layer - How the Map Looks
 
 ```typescript
-interface MapDefinition {
-  // Data to visualize
-  people: Person[];
-
-  // Map view configuration
-  projection: {
-    type: 'orthographic' | 'mercator' | 'equirectangular';
-    rotation: [number, number, number]; // [λ, φ, γ]
-    scale?: number; // Optional scale factor
-    center?: [number, number]; // Optional center point
+interface MapStyle {
+  // Base map appearance
+  ocean: {
+    color: string;         // e.g., '#a8c5dd'
+    visible: boolean;
   };
 
-  // Visual styling
-  style?: {
-    oceanColor?: string;
-    landColor?: string;
-    countryStroke?: string;
-    // ... other style properties
+  land: {
+    color: string;         // e.g., '#d4c4b0'
+    visible: boolean;
   };
 
-  // Canvas aspect ratio (independent of page)
-  aspectRatio?: number; // e.g., 1.0 for square, 1.333 for 4:3
+  countries: {
+    stroke: string;        // e.g., '#8b7355'
+    strokeWidth: number;   // e.g., 0.5
+    fill: string;          // e.g., 'none'
+    visible: boolean;
+  };
+
+  graticule: {
+    stroke: string;        // e.g., '#ccc'
+    strokeWidth: number;   // e.g., 0.5
+    visible: boolean;
+  };
+
+  // Migration paths appearance
+  paths: {
+    stroke: string;        // Individual person colors
+    strokeWidth: number;   // e.g., 2
+    opacity: number;       // e.g., 0.8
+  };
+
+  // Background
+  background: {
+    color: string;         // e.g., '#f4ebe1' (antique parchment)
+  };
 }
 ```
 
-**Key change**: Map definition doesn't care about page size, only aspect ratio.
+**This layer**: Controls colors, strokes, visibility - the visual appearance of the map independent of data or page.
+
+### (b) User Data Layer - What Goes on the Map
+
+```typescript
+interface UserMapData {
+  // User's people and their journeys
+  people: Person[];
+
+  // Map view configuration (what area to show)
+  view: {
+    projection: 'orthographic' | 'mercator' | 'equirectangular';
+    rotation: [number, number, number]; // [λ, φ, γ] - where the map is centered
+  };
+}
+
+interface Person {
+  id: string;
+  name: string;
+  color: string;  // Path color for this person
+  locations: Location[];
+}
+
+interface Location {
+  countryCode: string;
+  longitude: number;
+  latitude: number;
+  date: string;
+}
+```
+
+**This layer**: The user's content - people, locations, paths. What story the map tells.
+
+### (c) Page Layout Layer - How to Position Map on Page
+
+```typescript
+interface PageLayout {
+  // Physical page specification
+  page: {
+    size: PageSize;              // '18x24', 'a4', etc.
+    orientation: 'portrait' | 'landscape';
+    dpi: number;                 // 300 for print
+    bleed: number;               // 0.125 inches
+    safeMargin: number;          // 0.25 inches
+  };
+
+  // How to fit map onto page
+  mapPlacement: {
+    aspectRatio: number;         // 1.0 for square globe, etc.
+    fillStrategy: 'maximize';    // Fill available space
+    // Result of layout calculation:
+    calculatedWidth?: number;    // Pixels
+    calculatedHeight?: number;   // Pixels
+    x?: number;                  // Position on page
+    y?: number;                  // Position on page
+  };
+
+  // Furniture placement
+  furniture: {
+    title: {
+      text: string;
+      subtitle: string;
+      position: FurniturePosition; // 'top-left', etc.
+    };
+    qrCode: {
+      url: string;
+      position: FurniturePosition;
+    };
+  };
+}
+```
+
+**This layer**: How to scale, center, and position the map canvas within the physical page boundaries.
+
+## Combined Definition
+
+For actual implementation, these are combined into a complete specification:
+
+```typescript
+interface CompleteMapSpec {
+  // (a) How the map looks
+  style: MapStyle;
+
+  // (b) What data to show
+  data: UserMapData;
+
+  // (c) How to position on page
+  layout: PageLayout;
+}
+```
+
+**Key insight**: These three layers are **independent**:
+- Same style + data, different layouts → different page sizes
+- Same style + layout, different data → different user stories
+- Same data + layout, different styles → different visual themes
+
+## Visual Representation
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ (c) PAGE LAYOUT LAYER                                       │
+│                                                              │
+│  Page: 18×24", Portrait, 300 DPI                           │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │ Bleed & Safe Areas                                 │    │
+│  │                                                     │    │
+│  │  ┌──────────────────────────────────────────┐     │    │
+│  │  │ (b) USER DATA LAYER                      │     │    │
+│  │  │                                          │     │    │
+│  │  │  Projection: Orthographic               │     │    │
+│  │  │  Rotation: [-20, -30, 0]                │     │    │
+│  │  │                                          │     │    │
+│  │  │  People:                                 │     │    │
+│  │  │  • Alice (red): NYC → London → Tokyo    │     │    │
+│  │  │  • Bob (teal): Toronto → Paris → Sydney │     │    │
+│  │  │                                          │     │    │
+│  │  │  ┌────────────────────────────────┐     │     │    │
+│  │  │  │ (a) MAP STYLE LAYER            │     │     │    │
+│  │  │  │                                │     │     │    │
+│  │  │  │  Ocean: #a8c5dd                │     │     │    │
+│  │  │  │  Land: #d4c4b0                 │     │     │    │
+│  │  │  │  Countries: stroke #8b7355     │     │     │    │
+│  │  │  │  Graticule: stroke #ccc        │     │     │    │
+│  │  │  │  Background: #f4ebe1           │     │     │    │
+│  │  │  │                                │     │     │    │
+│  │  │  │         Rendered Globe         │     │     │    │
+│  │  │  │            🌍                  │     │     │    │
+│  │  │  └────────────────────────────────┘     │     │    │
+│  │  │                                          │     │    │
+│  │  │  Map positioned at: (x, y)               │     │    │
+│  │  │  Scaled to: width × height               │     │    │
+│  │  └──────────────────────────────────────────┘     │    │
+│  │                                                     │    │
+│  │  Title: "Our Family Journey"  [QR Code]            │    │
+│  │  Subtitle: "2010-2024"                             │    │
+│  └────────────────────────────────────────────────────┘    │
+│                                                              │
+│  Furniture positioned at calculated coordinates             │
+└─────────────────────────────────────────────────────────────┘
+
+Result: Complete print-ready output
+```
+
+## Layer Responsibilities
+
+| Layer | What It Controls | Example |
+|-------|------------------|---------|
+| **(a) Map Style** | Colors, strokes, visibility | Ocean blue, land beige, country borders |
+| **(b) User Data** | Content, view angle | Alice's journey NYC→London→Tokyo, rotation [-20,-30,0] |
+| **(c) Page Layout** | Physical output, positioning | 18×24" portrait, map centered, title top-left |
+
+## Data Flow
+
+```
+1. User configures data (Step 1: /create-map)
+   → UserMapData created
+
+2. System applies default style
+   → MapStyle created (or user selects theme)
+
+3. User configures print (Step 2: /configure-print)
+   → PageLayout created
+
+4. Layout engine calculates
+   → calculateLayout(style, data, layout)
+   → LayoutResult with exact positions
+
+5. Renderer combines all three
+   → renderMap(style, data, layoutResult)
+   → Final SVG at 300 DPI
+
+6. Export captures
+   → Puppeteer screenshots SVG
+   → Print-ready PNG
+```
 
 ### 2. Page Specification (Print Output)
 
