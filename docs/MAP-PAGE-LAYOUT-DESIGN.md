@@ -14,6 +14,55 @@ We need a clean separation that allows us to:
 - Place furniture predictably without affecting map scale
 - Generate pixel-perfect print output
 
+## Critical Requirements
+
+### 1. WYSIWYG: What You See Is What You Get
+
+**Browser preview MUST match print output exactly.**
+
+The user experience is a two-step configuration process:
+
+**Step 1: Configure Map Data**
+- User adds people, locations, paths
+- Adjusts globe rotation interactively
+- Sees map content in browser
+- **No page context yet** - just the map
+
+**Step 2: Configure Print Layout**
+- User selects page size (18×24, A4, etc.)
+- Selects orientation (portrait/landscape)
+- Enters title and subtitle text
+- Browser shows **exact preview** of printable page:
+  - Rectangular overlay showing page boundaries
+  - Map positioned exactly as it will print (auto-calculated to maximize fill)
+  - Furniture (title, QR) positioned automatically by layout engine
+  - Page margins, safe areas visualized
+- User can adjust:
+  - Page size and orientation
+  - Map center/rotation (fine-tune)
+  - Title and subtitle TEXT content
+- **Furniture positions are automatic** - calculated by layout algorithm
+- **User cannot manually position furniture** - keeps design clean and professional
+
+**The browser preview at 300 DPI downscaled to screen resolution MUST be pixel-perfect identical to the exported PNG.**
+
+### 2. High-Quality Print Output
+
+**Print must be high-DPI with exact browser reproduction.**
+
+- **DPI**: 300 minimum for all print sizes
+- **Color accuracy**: sRGB ICC profile embedded
+- **Font rendering**: Identical fonts in browser and Puppeteer
+- **No surprises**: User sees EXACTLY what they'll get printed
+- **Precision**: Pixel-perfect reproduction, not approximate
+
+**This means:**
+- Same D3 rendering code for browser and export
+- Same SVG → PNG conversion path
+- Same layout calculation
+- Puppeteer renders same DOM as user sees
+- No "print preview is close enough" - it must be exact
+
 ### Current Issue: Massive Wasted Space
 
 Looking at `output.png` (18×24 inch @ 300 DPI = 5475×7275px):
@@ -209,33 +258,35 @@ const PAGE_SIZES: Record<PageSize, { width: number; height: number }> = {
 
 ```typescript
 interface FurnitureConfig {
-  // Title block
+  // Title block - positions calculated automatically by layout engine
   title?: {
     text: string;
     subtitle?: string;
-    position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-    maxWidth?: number; // Percentage of safe area width
+    // Position is automatic: top-left, QR goes top-right
   };
 
-  // QR code
+  // QR code - position calculated automatically
   qrCode?: {
     url: string;
-    position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-    size?: number; // In inches
+    // Position is automatic: top-right
+    // Size is automatic: calculated based on available space
   };
 
-  // Legend (future)
+  // Legend (future) - position automatic
   legend?: {
-    position: 'left' | 'right';
     items: LegendItem[];
+    // Position calculated to not overlap with map
   };
 
-  // Scale bar (future)
+  // Scale bar (future) - position automatic
   scaleBar?: {
-    position: 'bottom-left' | 'bottom-right';
     units: 'km' | 'miles';
+    // Position calculated based on available space
   };
 }
+
+// Note: User only provides CONTENT (text, URL), not positions.
+// Layout engine calculates all positions to maximize map fill.
 ```
 
 ### 4. Layout Result (Computed Positions)
@@ -441,20 +492,133 @@ function composePage(
 }
 ```
 
-## Example Usage
+## User Workflow: Two-Step Configuration
+
+### Step 1: Map Configuration Page (`/create-map`)
+
+**User Interface:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ AlwaysMap - Create Your Map                            │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  [Add Person] [Remove Person]                          │
+│                                                         │
+│  People:                                                │
+│  • Alice - 3 locations                                  │
+│  • Bob - 2 locations                                    │
+│                                                         │
+│  ┌────────────────────────────────────────────────┐    │
+│  │                                                 │    │
+│  │         Interactive Globe                       │    │
+│  │     (drag to rotate, shows data)                │    │
+│  │                                                 │    │
+│  │              🌍                                 │    │
+│  │                                                 │    │
+│  └────────────────────────────────────────────────┘    │
+│                                                         │
+│  [← Back]              [Continue to Print Preview →]   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**At this stage:**
+- User configures ONLY the map data
+- Interactive rotation to find best view
+- No page size/orientation decisions yet
+- Map fills available browser space
+
+### Step 2: Print Layout Page (`/configure-print`)
+
+**User Interface:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ AlwaysMap - Configure Print                            │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  Page Size: [18×24 ▼]  Orientation: [Portrait ▼]      │
+│                                                         │
+│  Title: [Our Family Journey_____________]              │
+│  Subtitle: [2010-2024___________________]              │
+│                                                         │
+│  ┌────────────────────────────────────────────────┐    │
+│  │ ┌──────────────────────────────────────────┐   │    │
+│  │ │ Bleed (0.125")                           │   │    │ ← Page boundary overlay
+│  │ │  ┌────────────────────────────────────┐  │   │    │
+│  │ │  │ Safe Area                          │  │   │    │
+│  │ │  │ Title: Our Family Journey          │  │   │    │
+│  │ │  │                              [QR]  │  │   │    │
+│  │ │  │  ┌──────────────────────────┐     │  │   │    │
+│  │ │  │  │                          │     │  │   │    │
+│  │ │  │  │    Globe (centered)      │     │  │   │    │ ← Exact print preview
+│  │ │  │  │         🌍               │     │  │   │    │
+│  │ │  │  │                          │     │  │   │    │
+│  │ │  │  └──────────────────────────┘     │  │   │    │
+│  │ │  │                                    │  │   │    │
+│  │ │  └────────────────────────────────────┘  │   │    │
+│  │ └──────────────────────────────────────────┘   │    │
+│  └────────────────────────────────────────────────┘    │
+│                                                         │
+│  Fine-tune rotation: [Rotate Left] [Rotate Right]      │
+│                                                         │
+│  [← Back to Map]        [Export to PNG →]              │
+└─────────────────────────────────────────────────────────┘
+```
+
+**At this stage:**
+- User sees EXACT print preview in browser
+- Page boundaries visualized with overlays
+- Can change page size → preview updates instantly
+- Can change orientation → preview updates instantly
+- Can fine-tune map rotation → preview updates
+- Can edit title/subtitle TEXT → preview updates
+- **Furniture positions are automatic** - calculated by layout engine
+- **What they see IS what they'll get**
+
+**Key Implementation Detail:**
+The preview renders the SAME SVG at print DPI (300), then scales it down to fit the browser viewport. This ensures pixel-perfect accuracy.
 
 ```typescript
-// Define the map (geography + data)
+// Render at print DPI
+const printDimensions = calculatePageDimensions({ size: '18x24', dpi: 300 });
+// → 5475×7275px
+
+// Display at screen resolution (scale down)
+const screenScale = Math.min(
+  viewportWidth / printDimensions.width,
+  viewportHeight / printDimensions.height
+);
+
+// SVG transform for display
+svg.style.transform = `scale(${screenScale})`;
+svg.style.transformOrigin = 'top left';
+```
+
+### Step 3: Export (Backend/Puppeteer)
+
+When user clicks "Export to PNG":
+
+1. POST map definition + page spec + furniture to `/api/export`
+2. Server/Puppeteer navigates to `/render` with encoded data
+3. Renders SAME layout calculation, SAME SVG
+4. Takes screenshot at 300 DPI
+5. Returns identical PNG to what user previewed
+
+## Example Code Usage
+
+### Browser: Print Preview Page
+
+```typescript
+// User's map data from Step 1
 const mapDefinition: MapDefinition = {
   people: [...],
   projection: {
     type: 'orthographic',
     rotation: [-20, -30, 0]
   },
-  aspectRatio: 1.0 // Square globe view
+  aspectRatio: 1.0
 };
 
-// Define the page (print output)
+// User's print choices from Step 2
 const pageSpec: PageSpec = {
   size: '18x24',
   orientation: 'portrait',
@@ -464,30 +628,59 @@ const pageSpec: PageSpec = {
   colorProfile: 'srgb'
 };
 
-// Define furniture (decorations)
+// User's text from Step 2
 const furniture: FurnitureConfig = {
   title: {
     text: 'Our Family Journey',
     subtitle: '2010-2024',
-    position: 'bottom-left'
+    position: 'top-left'
   },
   qrCode: {
     url: 'https://alwaysmap.com/map/abc123',
-    position: 'bottom-right',
-    size: 1.0 // 1 inch
+    position: 'top-right',
+    size: 1.0
   }
 };
 
-// Calculate layout (pure function)
+// Calculate layout (same in browser and Puppeteer)
 const layout = calculateLayout(mapDefinition, pageSpec, furniture);
 
-// Render map canvas
-const mapCanvas = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-renderMapCanvas(mapDefinition, layout.map, mapCanvas);
+// Render at print DPI
+const svg = renderPrintPreview(mapDefinition, pageSpec, furniture, layout);
+// → SVG at 5475×7275px
 
-// Compose final page
-const page = composePage(mapCanvas, layout, furniture);
-document.body.appendChild(page);
+// Scale down for display
+const scale = calculateDisplayScale(layout.page, viewportSize);
+svg.style.transform = `scale(${scale})`;
+
+// Render page boundary overlays
+renderPageOverlay(svg, layout, scale);
+```
+
+### Puppeteer: Export to PNG
+
+```typescript
+// Same inputs from user (passed via URL parameters)
+const { mapDefinition, pageSpec, furniture } = decodeFromURL();
+
+// Same layout calculation (pure function)
+const layout = calculateLayout(mapDefinition, pageSpec, furniture);
+
+// Same rendering code
+const svg = renderPrintPreview(mapDefinition, pageSpec, furniture, layout);
+
+// Set viewport to exact print dimensions
+await page.setViewport({
+  width: layout.page.width,  // 5475px
+  height: layout.page.height, // 7275px
+  deviceScaleFactor: 1
+});
+
+// Take screenshot (pixel-perfect)
+const screenshot = await page.screenshot({ type: 'png', fullPage: true });
+
+// Embed ICC profile
+const final = await embedSRGBProfile(screenshot);
 ```
 
 ## Benefits of This Design
