@@ -35,6 +35,9 @@ importers:
       topojson-client:
         specifier: ^3.1.0
         version: 3.1.0
+      versor:
+        specifier: ^0.2.0
+        version: 0.2.0
     devDependencies:
       '@playwright/test':
         specifier: ^1.48.0
@@ -1845,6 +1848,10 @@ packages:
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
     hasBin: true
+
+  versor@0.2.0:
+    resolution: {integrity: sha512-2UJ32VNh+lMUP9RlLoneEdrnupW3eIM9TGdTuaa+HSUqKACt9Vvw+xoGFGdd0YsUnGidTNyuxdhQRhJVpDAvqw==}
+    engines: {node: '>=12'}
 
   vite-node@2.1.9:
     resolution: {integrity: sha512-AM9aQ/IPrW/6ENLQg3AGY4K1N2TGZdR5e4gu/MmmR2xR3Ll1+dib+nook92g4TV3PXVyeyxdWwtaCAiUL0hMxA==}
@@ -3768,6 +3775,8 @@ snapshots:
   uuid@8.3.2: {}
 
   uuid@9.0.1: {}
+
+  versor@0.2.0: {}
 
   vite-node@2.1.9(@types/node@24.10.1):
     dependencies:

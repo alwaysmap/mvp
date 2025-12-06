@@ -18,6 +18,7 @@ import { calculateDimensions, validateDimensions, PRINT_SPECS } from './dimensio
 import { waitForFonts, setRenderReady, setRenderError } from './fonts.js';
 import { createProjection, createGeoPath } from './projection.js';
 import { renderTitleBox, renderQRCode, renderAttribution } from './overlays.js';
+import { createRotationDrag } from './rotation.js';
 import {
 	colors,
 	styleLand,
@@ -140,8 +141,12 @@ export async function renderMap(
 		});
 
 		// Step 6: Load and render geographic data
+		let landData: any, countriesData: any;
 		try {
-			await renderGeography(svg, path);
+			const data = await loadGeographicData();
+			landData = data.landData;
+			countriesData = data.countriesData;
+			renderGeography(svg, path, landData, countriesData);
 			console.log('✓ Geography rendered');
 		} catch (error) {
 			const errorMsg =
@@ -154,6 +159,19 @@ export async function renderMap(
 		// Step 7: Render migration paths
 		renderMigrationPaths(svg, mapDef.people, projection);
 		console.log('✓ Migration paths rendered:', mapDef.people.length, 'people');
+
+		// Step 7.5: Enable interactive rotation if requested
+		if (options.interactive && projection.rotate) {
+			const drag = createRotationDrag(projection, (rotation) => {
+				// Re-render geography and paths on rotation
+				svg.selectAll('.ocean, .graticule, .land, .countries, .migration-paths').remove();
+				renderGeography(svg, path, landData, countriesData);
+				renderMigrationPaths(svg, mapDef.people, projection);
+			});
+
+			svg.call(drag as any);
+			console.log('✓ Interactive rotation enabled');
+		}
 
 		// Step 8: Render title box
 		renderTitleBox(svg, mapDef.title, mapDef.subtitle, dimensions.safeArea);
@@ -186,13 +204,9 @@ export async function renderMap(
 }
 
 /**
- * Loads and renders geographic features (land, countries, graticule).
+ * Loads geographic data from static files.
  */
-async function renderGeography(
-	svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>,
-	path: d3.GeoPath
-): Promise<void> {
-	// Load TopoJSON data
+async function loadGeographicData(): Promise<{ landData: any; countriesData: any }> {
 	const [landData, countriesData] = await Promise.all([
 		fetch('/data/land-110m.json').then((r) => {
 			if (!r.ok) throw new Error(`Failed to load land data: ${r.statusText}`);
@@ -204,6 +218,18 @@ async function renderGeography(
 		})
 	]);
 
+	return { landData, countriesData };
+}
+
+/**
+ * Renders geographic features (land, countries, graticule).
+ */
+function renderGeography(
+	svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>,
+	path: d3.GeoPath,
+	landData: any,
+	countriesData: any
+): void {
 	// Create graticule (latitude/longitude grid)
 	const graticule = d3.geoGraticule10();
 

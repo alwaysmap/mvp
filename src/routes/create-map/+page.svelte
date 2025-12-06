@@ -73,7 +73,7 @@
 
 			const result = await renderMap(sampleMap, PRINT_SPECS['18x24'], {
 				selector: '#map-svg',
-				interactive: false
+				interactive: true  // Enable interactive rotation
 				// backgroundColor uses default antique parchment color from styles.ts
 			});
 
