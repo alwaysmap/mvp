@@ -733,6 +733,43 @@ svg.style.transform = `scale(${screenScale})`;
 svg.style.transformOrigin = 'top left';
 ```
 
+**Page Boundary UX Pattern** (inspired by Mapiful):
+
+The page boundary should be visualized as a **fixed-size rectangle overlay**:
+- Shows exact page dimensions at scale
+- Map is rendered INSIDE the page boundary
+- User can pan/zoom the globe WITHIN the page frame
+- Page boundary stays fixed while map moves underneath
+- Gives clear WYSIWYG preview of print area
+
+```
+┌─────────────────────────────────────────────┐
+│ Browser Viewport                            │
+│                                             │
+│    ┌─────────────────────────────────┐     │ ← Page boundary (fixed)
+│    │ Page (scaled to fit viewport)  │     │
+│    │                                 │     │
+│    │   ╔═══════════════════╗         │     │ ← Map canvas (pannable)
+│    │   ║                   ║         │     │
+│    │   ║   Globe (can      ║         │     │
+│    │   ║   pan/zoom here)  ║         │     │
+│    │   ║        🌍         ║         │     │
+│    │   ║                   ║         │     │
+│    │   ╚═══════════════════╝         │     │
+│    │                                 │     │
+│    │ Title: ...          [QR]        │     │
+│    └─────────────────────────────────┘     │
+│                                             │
+└─────────────────────────────────────────────┘
+
+User interaction:
+- Page boundary = visual frame (non-interactive)
+- Map inside = interactive (drag to pan, scroll to rotate)
+- Furniture = fixed positions within page
+```
+
+This creates a clear mental model: "I'm designing what will print on this exact page size."
+
 ### Step 3: Export (Backend/Puppeteer)
 
 When user clicks "Export to PNG":
@@ -823,6 +860,170 @@ const screenshot = await page.screenshot({ type: 'png', fullPage: true });
 const final = await embedSRGBProfile(screenshot);
 ```
 
+## Page Boundary Visualization
+
+### UX Pattern (Mapiful-style)
+
+The page boundary acts as a **fixed viewport frame** while the map is interactive underneath:
+
+**Visual Elements**:
+1. **Page Container** (outer frame)
+   - Fixed size rectangle
+   - Represents actual print page
+   - Scales to fit browser viewport
+   - Shows bleed area (light overlay)
+   - Shows trim line (dashed border)
+   - Shows safe area (inner dashed border)
+
+2. **Map Canvas** (inner content)
+   - Renders at full print DPI
+   - Clipped to page boundaries
+   - Interactive: user can pan/rotate
+   - Map moves, page stays fixed
+
+3. **Furniture Overlays** (positioned elements)
+   - Title block (positioned via corner selection)
+   - QR code (positioned via corner selection)
+   - Rendered at exact calculated coordinates
+   - Non-interactive (except text editing)
+
+### SVG Structure
+
+```xml
+<svg id="print-preview" width="5475" height="7275" style="transform: scale(0.15)">
+  <!-- Background (bleed area) -->
+  <rect class="bleed-area" fill="#f4ebe1" width="5475" height="7275"/>
+
+  <!-- Trim line visualization -->
+  <rect class="trim-line"
+        stroke-dasharray="10,5"
+        stroke="#999"
+        fill="none"
+        x="37.5" y="37.5"
+        width="5400" height="7200"/>
+
+  <!-- Safe area visualization -->
+  <rect class="safe-area"
+        stroke-dasharray="5,5"
+        stroke="#ccc"
+        fill="none"
+        x="112.5" y="112.5"
+        width="5250" height="7050"/>
+
+  <!-- Map canvas (clipped to safe area) -->
+  <g id="map-canvas" clip-path="url(#safe-clip)">
+    <!-- D3 renders here: ocean, land, graticule, paths -->
+    <circle class="ocean" cx="2737" cy="3637" r="2625" fill="#a8c5dd"/>
+    <!-- ... geographic elements ... -->
+  </g>
+
+  <!-- Furniture (positioned by layout engine) -->
+  <g id="title-block" transform="translate(112.5, 112.5)">
+    <text class="title">Our Family Journey</text>
+    <text class="subtitle">2010-2024</text>
+  </g>
+
+  <g id="qr-code" transform="translate(5250, 112.5)">
+    <!-- QR code paths -->
+  </g>
+</svg>
+```
+
+### Interaction Model
+
+**Step 1: Page Loads**
+- Layout calculation runs
+- Map sized to maximize fill
+- Furniture positioned in chosen corners
+- Everything rendered at 300 DPI
+- CSS transform scales to fit viewport
+
+**Step 2: User Interacts with Map**
+- Drag on map → rotates globe (versor)
+- Map canvas `<g>` is updated
+- Page boundary stays fixed
+- Furniture stays fixed
+- Only geographic elements move
+
+**Step 3: User Changes Settings**
+- Page size dropdown → recalculate layout, re-render
+- Orientation dropdown → recalculate layout, re-render
+- Furniture position → recalculate coordinates, re-render
+- Title text → update SVG text element (no layout change)
+
+**Step 4: Export**
+- Same SVG structure
+- Puppeteer renders at full 300 DPI
+- Screenshot captures entire page
+- Result: pixel-perfect match to preview
+
+### Implementation Code
+
+```typescript
+// Svelte component for print preview
+function createPrintPreview(
+  mapDef: MapDefinition,
+  pageSpec: PageSpec,
+  furniture: FurnitureConfig
+) {
+  // Calculate layout
+  const layout = calculateLayout(mapDef, pageSpec, furniture);
+
+  // Create SVG at print DPI
+  const svg = createSVG(layout.page.width, layout.page.height);
+
+  // Add page boundary visualizations
+  renderPageBoundaries(svg, layout);
+
+  // Render map canvas (clipped to safe area)
+  const mapGroup = svg.append('g')
+    .attr('id', 'map-canvas')
+    .attr('clip-path', 'url(#safe-clip)');
+
+  renderMapCanvas(mapDef, layout.map, mapGroup);
+
+  // Add furniture at calculated positions
+  renderFurniture(svg, furniture, layout.furniture);
+
+  // Scale to fit viewport
+  const scale = calculateDisplayScale(layout.page, viewportSize);
+  svg.style('transform', `scale(${scale})`);
+  svg.style('transform-origin', 'top left');
+
+  return svg;
+}
+
+// Enable interactive rotation (versor drag)
+function makeMapInteractive(svgElement: SVGSVGElement, mapGroup: SVGGElement) {
+  const drag = createRotationDrag((rotation) => {
+    // Update projection rotation
+    projection.rotate(rotation);
+
+    // Re-render geographic elements only
+    mapGroup.selectAll('path').attr('d', path);
+
+    // Furniture and page boundaries DON'T update
+  });
+
+  svgElement.call(drag);
+}
+```
+
+### Visual Feedback
+
+**When user interacts**:
+- Cursor changes to `grab` / `grabbing` over map
+- Map canvas has subtle shadow/border to indicate it's interactive
+- Page boundary has slightly different background to show it's fixed
+- Smooth rotation animation (versor drag with 10 steps)
+
+**When layout changes** (page size, orientation):
+- Brief loading state (100ms)
+- Fade out old layout
+- Recalculate
+- Fade in new layout
+- Preserves map rotation if possible
+
 ## Benefits of This Design
 
 ### 1. Separation of Concerns
@@ -849,6 +1050,12 @@ const final = await embedSRGBProfile(screenshot);
 - Uses D3's projection system correctly
 - Scale is calculated per projection type
 - Follows D3 conventions for SVG composition
+
+### 6. Clear UX (Mapiful Pattern)
+- Page boundary = fixed frame (WYSIWYG)
+- Map = interactive content inside frame
+- Immediate visual feedback
+- User understands exactly what will print
 
 ## Migration Path
 
