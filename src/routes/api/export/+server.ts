@@ -1,5 +1,5 @@
 /**
- * Export API - Async version using job queue
+ * Export API - Async version using pg-boss job queue
  *
  * POST /api/export - Create printable map config and trigger export job
  */
@@ -7,7 +7,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createPrintableMap } from '$lib/db/repositories/printable-maps';
-import { addExportJob } from '$lib/queue/export-queue';
+import { addExportJob } from '$lib/queue/pg-boss-queue.js';
 import type { PrintableMapData } from '$lib/db/schema';
 import { PRINT_SPECS } from '$lib/map-renderer/dimensions.js';
 
@@ -58,13 +58,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Create printable map configuration
 		const printableMap = await createPrintableMap(userMapId, data);
 
-		// Add export job to queue
-		const jobId = await addExportJob(printableMap.id);
+		// Add export job to queue (creates print_job and queues with pg-boss)
+		const printJobId = await addExportJob(printableMap.id);
 
 		return json(
 			{
 				printableMap,
-				jobId,
+				printJobId,
 				message: 'Export job queued'
 			},
 			{ status: 202 }
@@ -113,7 +113,7 @@ export const GET: RequestHandler = async () => {
 		response: {
 			success: {
 				printableMap: 'PrintableMap object',
-				jobId: 'Job ID for status polling',
+				printJobId: 'Print job ID for status polling',
 				message: 'Export job queued'
 			},
 			error: 'JSON with error details'

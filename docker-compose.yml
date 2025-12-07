@@ -55,9 +55,12 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
       PRINTFUL_API_KEY: ${PRINTFUL_API_KEY}
       RENDER_BASE_URL: http://app:5173
+      API_URL: http://app:5173
+      EXPORT_DIR: /app/exports
     volumes:
       - ./gcp-credentials.json:/app/gcp-credentials.json:ro
       - ./exports:/app/exports
+    command: pnpm worker
     depends_on:
       postgres:
         condition: service_healthy

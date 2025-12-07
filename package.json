@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "export": "tsx scripts/export-map.ts",
-    "db:setup": "tsx scripts/db-setup.ts"
+    "db:setup": "tsx scripts/db-setup.ts",
+    "worker": "tsx scripts/start-worker.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
