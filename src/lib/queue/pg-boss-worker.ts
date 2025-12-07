@@ -19,6 +19,7 @@ import path from 'path';
 // API URL from environment (worker calls API, not database)
 const API_URL = process.env.API_URL || 'http://localhost:5173';
 const EXPORT_DIR = process.env.EXPORT_DIR || '/app/exports';
+const DEBUG_MODE = process.env.DEBUG_MODE === 'true';
 
 /**
  * Job data structure
@@ -119,6 +120,11 @@ async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 		// 4. Render via Puppeteer
 		console.log('🎭 Starting Puppeteer export...');
 		const renderUrl = process.env.RENDER_BASE_URL || API_URL;
+
+		if (DEBUG_MODE) {
+			console.log('🐛 DEBUG MODE ENABLED - will save metadata JSON sidecar');
+		}
+
 		const screenshot = await exportMapToPNG(mapDefinition, printSpec, {
 			baseUrl: renderUrl,
 			timeout: 120000
@@ -140,9 +146,54 @@ async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 			fs.mkdirSync(EXPORT_DIR, { recursive: true });
 		}
 
-		const filename = `${printJobId}.png`;
+		// Create ISO timestamp for filename (YYYY-MM-DDTHH-mm-ss)
+		const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+		const filename = `${timestamp}_${printJobId}.png`;
 		const filePath = path.join(EXPORT_DIR, filename);
 		fs.writeFileSync(filePath, processed);
+
+		// 8. Save debug metadata if enabled
+		if (DEBUG_MODE) {
+			const metadataFilename = `${timestamp}_${printJobId}.json`;
+			const metadataPath = path.join(EXPORT_DIR, metadataFilename);
+
+			const metadata = {
+				printJobId,
+				printableMapId,
+				exportedAt: new Date().toISOString(),
+				pageSize: printableMapData.pageSize,
+				printSpec: {
+					name: printSpec.name,
+					widthInches: printSpec.widthInches,
+					heightInches: printSpec.heightInches,
+					dpi: printSpec.dpi,
+					bleedInches: printSpec.bleedInches,
+					pixelWidth: validation.metadata?.width,
+					pixelHeight: validation.metadata?.height
+				},
+				mapDefinition: {
+					title: mapDefinition.title,
+					subtitle: mapDefinition.subtitle,
+					projection: printableMapData.projection || 'orthographic',
+					rotation: mapDefinition.rotation,
+					zoom: printableMapData.zoom || 1.0,
+					pan: printableMapData.pan || [0, 0],
+					peopleCount: mapDefinition.people.length,
+					locationsCount: mapDefinition.people.reduce(
+						(sum, p) => sum + (p.locations?.length || 0),
+						0
+					)
+				},
+				file: {
+					path: filePath,
+					sizeBytes: Buffer.byteLength(processed),
+					sizeMB: (Buffer.byteLength(processed) / 1024 / 1024).toFixed(2)
+				}
+			};
+
+			fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+			console.log(`🐛 Debug metadata saved: ${metadataPath}`);
+		}
 
 		const durationMs = Date.now() - startTime;
 		const fileSizeMB = (Buffer.byteLength(processed) / 1024 / 1024).toFixed(2);
