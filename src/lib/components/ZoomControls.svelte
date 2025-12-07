@@ -63,26 +63,28 @@
 
 <style>
 	.zoom-controls {
-		padding: 1rem;
-		background: #f5f5f5;
-		border-radius: 8px;
+		padding: 0;
+		background: transparent;
+		border-radius: 0;
 		font-family: 'DM Sans', sans-serif;
 	}
 
 	h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1rem;
+		margin: 0 0 0.5rem 0;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		color: #333;
+		text-transform: uppercase;
+		letter-spacing: 0.3px;
 	}
 
 	.zoom-display {
 		text-align: center;
-		margin-bottom: 0.75rem;
+		margin-bottom: 0.5rem;
 	}
 
 	.zoom-value {
-		font-size: 1.5rem;
+		font-size: 1.125rem;
 		font-weight: 600;
 		color: #4a90e2;
 		font-family: monospace;
@@ -91,7 +93,7 @@
 	.button-group {
 		display: flex;
 		gap: 0.5rem;
-		margin-bottom: 0.75rem;
+		margin-bottom: 0.5rem;
 	}
 
 	button {

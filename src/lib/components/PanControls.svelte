@@ -77,33 +77,35 @@
 
 <style>
 	.pan-controls {
-		padding: 1rem;
-		background: #f5f5f5;
-		border-radius: 8px;
+		padding: 0;
+		background: transparent;
+		border-radius: 0;
 		font-family: 'DM Sans', sans-serif;
 	}
 
 	h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1rem;
+		margin: 0 0 0.5rem 0;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		color: #333;
+		text-transform: uppercase;
+		letter-spacing: 0.3px;
 	}
 
 	.control-group {
-		margin-bottom: 1rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.control-group:last-of-type {
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.375rem;
 	}
 
 	label {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 0.5rem;
-		font-size: 0.875rem;
+		margin-bottom: 0.375rem;
+		font-size: 0.75rem;
 	}
 
 	.axis-label {
@@ -114,7 +116,7 @@
 	.value {
 		font-family: monospace;
 		color: #4a90e2;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 600;
 	}
 
@@ -160,13 +162,13 @@
 
 	.reset-button {
 		width: 100%;
-		margin-top: 1rem;
-		padding: 0.625rem;
+		margin-top: 0.75rem;
+		padding: 0.5rem;
 		background: #4a90e2;
 		color: white;
 		border: none;
 		border-radius: 4px;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 500;
 		cursor: pointer;
 		transition: background 0.2s;

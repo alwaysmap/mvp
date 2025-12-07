@@ -82,6 +82,12 @@ export interface EditorState {
 
 	/** Whether a save operation is in progress */
 	isSaving: boolean;
+
+	/** Print job ID (set after triggering export) */
+	printJobId?: string;
+
+	/** Whether export has been triggered */
+	isExporting: boolean;
 }
 
 /**
@@ -103,7 +109,9 @@ const DEFAULT_STATE: EditorState = {
 	subtitle: '2010-2024',
 	userMapId: undefined,
 	isSaved: false,
-	isSaving: false
+	isSaving: false,
+	printJobId: undefined,
+	isExporting: false
 };
 
 /**
@@ -367,6 +375,55 @@ export function createMapEditorStore(initialState: Partial<EditorState> = {}) {
 		 */
 		markUnsaved() {
 			state.isSaved = false;
+		},
+
+		/**
+		 * Trigger export to PNG.
+		 * Creates a printable map and queues an export job.
+		 * @returns Promise with the print job ID
+		 */
+		async triggerExport(): Promise<string> {
+			if (!state.userMapId) {
+				throw new Error('Map must be saved before exporting');
+			}
+
+			state.isExporting = true;
+
+			try {
+				// Determine orientation from page size
+				const pageSize = state.page.size;
+				const [width, height] = pageSize.split('x').map(Number);
+				const orientation = !isNaN(width) && !isNaN(height) && width > height ? 'landscape' : 'portrait';
+
+				const response = await fetch('/api/export', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						userMapId: state.userMapId,
+						pageSize,
+						orientation,
+						projection: state.view.projection,
+						rotation: state.view.rotation,
+						zoom: state.view.zoom,
+						pan: state.view.pan
+					})
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					throw new Error(error.error || 'Failed to trigger export');
+				}
+
+				const data = await response.json();
+				state.printJobId = data.printJobId;
+
+				return data.printJobId;
+			} catch (error) {
+				console.error('Failed to trigger export:', error);
+				throw error;
+			} finally {
+				state.isExporting = false;
+			}
 		}
 	};
 }

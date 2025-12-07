@@ -107,29 +107,31 @@
 
 <style>
 	.page-size-selector {
-		padding: 1rem;
-		background: #f5f5f5;
-		border-radius: 8px;
+		padding: 0;
+		background: transparent;
+		border-radius: 0;
 		font-family: 'DM Sans', sans-serif;
 	}
 
 	h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1rem;
+		margin: 0 0 0.5rem 0;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		color: #333;
+		text-transform: uppercase;
+		letter-spacing: 0.3px;
 	}
 
 	.size-control {
-		margin-bottom: 1rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.size-control label {
 		display: block;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: #555;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.375rem;
 	}
 
 	select {
@@ -155,15 +157,15 @@
 	}
 
 	.orientation-control {
-		margin-bottom: 1rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.orientation-label {
 		display: block;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: #555;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.375rem;
 	}
 
 	.orientation-buttons {
@@ -199,12 +201,12 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.75rem;
+		padding: 0.5rem 0.625rem;
 		background: #fff;
 		border: 1px solid #ddd;
 		border-radius: 4px;
 		cursor: pointer;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 	}
 
 	.toggle-label:hover {

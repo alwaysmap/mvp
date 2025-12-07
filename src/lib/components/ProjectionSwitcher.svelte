@@ -102,24 +102,26 @@
 
 <style>
 	.projection-switcher {
-		padding: 1rem;
-		background: #f5f5f5;
-		border-radius: 8px;
+		padding: 0;
+		background: transparent;
+		border-radius: 0;
 		font-family: 'DM Sans', sans-serif;
 	}
 
 	h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1rem;
+		margin: 0 0 0.5rem 0;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		color: #333;
+		text-transform: uppercase;
+		letter-spacing: 0.3px;
 	}
 
 	.view-toggle {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: 0.5rem;
-		margin-bottom: 1rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.toggle-button {
@@ -146,15 +148,15 @@
 	}
 
 	.flat-projection-selector {
-		margin-top: 1rem;
+		margin-top: 0.75rem;
 	}
 
 	.flat-projection-selector label {
 		display: block;
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 500;
 		color: #555;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.375rem;
 	}
 
 	select {

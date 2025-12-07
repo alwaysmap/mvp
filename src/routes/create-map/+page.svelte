@@ -21,6 +21,8 @@
 
 	let saveError = $state<string | null>(null);
 	let saveSuccess = $state(false);
+	let exportError = $state<string | null>(null);
+	let showJobStatus = $state(false);
 
 	async function handleSave() {
 		saveError = null;
@@ -32,6 +34,17 @@
 			setTimeout(() => (saveSuccess = false), 3000);
 		} catch (error) {
 			saveError = error instanceof Error ? error.message : 'Failed to save map';
+		}
+	}
+
+	async function handleBuyPrint() {
+		exportError = null;
+
+		try {
+			await store.triggerExport();
+			showJobStatus = true;
+		} catch (error) {
+			exportError = error instanceof Error ? error.message : 'Failed to trigger export';
 		}
 	}
 
@@ -163,11 +176,30 @@
 
 				<button
 					class="buy-button"
-					disabled={!store.state.isSaved}
+					onclick={handleBuyPrint}
+					disabled={!store.state.isSaved || store.state.isExporting}
 					title={!store.state.isSaved ? 'Please save your map first' : 'Generate print-ready PNG'}
 				>
-					Buy Print (Coming Soon)
+					{#if store.state.isExporting}
+						Generating PNG...
+					{:else if store.state.printJobId}
+						✓ Export Started
+					{:else}
+						Buy Print
+					{/if}
 				</button>
+
+				{#if exportError}
+					<div class="error-message">{exportError}</div>
+				{/if}
+
+				{#if showJobStatus && store.state.printJobId}
+					<div class="job-status">
+						<div class="status-label">Job ID:</div>
+						<div class="status-value">{store.state.printJobId.substring(0, 8)}...</div>
+						<div class="status-info">Exporting in background...</div>
+					</div>
+				{/if}
 			</div>
 
 			<!-- Sample data info -->
@@ -263,29 +295,29 @@
 
 	.panel-title {
 		font-family: 'Cormorant Garamond', serif;
-		font-size: 1.5rem;
+		font-size: 1.25rem;
 		font-weight: 600;
 		margin: 0;
-		padding: 1.5rem 1.5rem 1rem 1.5rem;
+		padding: 1rem 1rem 0.75rem 1rem;
 		color: #1a1a1a;
-		border-bottom: 2px solid #f0f0f0;
+		border-bottom: 1px solid #f0f0f0;
 	}
 
 	.control-section {
-		padding: 1rem;
+		padding: 0.75rem 1rem;
 		border-bottom: 1px solid #f0f0f0;
 	}
 
 	.action-section {
-		padding: 1.5rem;
+		padding: 1rem;
 		border-bottom: 2px solid #e0e0e0;
 		background: #f8f9fa;
 	}
 
 	.action-section h3 {
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 600;
-		margin: 0 0 1rem 0;
+		margin: 0 0 0.75rem 0;
 		color: #333;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
@@ -367,16 +399,16 @@
 	}
 
 	.info-section {
-		padding: 1.5rem;
+		padding: 1rem;
 		background: #fafafa;
 		border-top: 1px solid #e0e0e0;
 		margin-top: auto;
 	}
 
 	.info-section h3 {
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 600;
-		margin: 0 0 1rem 0;
+		margin: 0 0 0.75rem 0;
 		color: #333;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;

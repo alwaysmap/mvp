@@ -31,7 +31,7 @@ test.describe('Map Save Functionality', () => {
 		await expect(mapIdInfo).toContainText('Map ID:');
 	});
 
-	test('should enable buy button after save', async ({ page }) => {
+	test('should enable buy button after save and trigger export', async ({ page }) => {
 		await page.goto('/create-map');
 
 		// Buy button should be disabled initially
@@ -43,8 +43,23 @@ test.describe('Map Save Functionality', () => {
 		await saveButton.click();
 		await expect(saveButton).toHaveText('✓ Saved', { timeout: 5000 });
 
-		// Buy button should now be enabled (but shows "Coming Soon")
+		// Buy button should now be enabled
 		await expect(buyButton).toBeEnabled();
-		await expect(buyButton).toContainText('Coming Soon');
+		await expect(buyButton).toContainText('Buy Print');
+
+		// Click buy button to trigger export
+		await buyButton.click();
+
+		// Should show loading state
+		await expect(buyButton).toContainText('Generating PNG...', { timeout: 1000 });
+
+		// Should show success state
+		await expect(buyButton).toContainText('✓ Export Started', { timeout: 10000 });
+
+		// Should show job status
+		const jobStatus = page.locator('.job-status');
+		await expect(jobStatus).toBeVisible();
+		await expect(jobStatus).toContainText('Job ID:');
+		await expect(jobStatus).toContainText('Exporting in background...');
 	});
 });
