@@ -73,6 +73,15 @@ export interface EditorState {
 
 	/** Subtitle for the map */
 	subtitle: string;
+
+	/** Saved user map ID (set after saving to database) */
+	userMapId?: string;
+
+	/** Whether the map has been saved */
+	isSaved: boolean;
+
+	/** Whether a save operation is in progress */
+	isSaving: boolean;
 }
 
 /**
@@ -91,7 +100,10 @@ const DEFAULT_STATE: EditorState = {
 	},
 	people: [],
 	title: 'Our Family Journey',
-	subtitle: '2010-2024'
+	subtitle: '2010-2024',
+	userMapId: undefined,
+	isSaved: false,
+	isSaving: false
 };
 
 /**
@@ -307,6 +319,54 @@ export function createMapEditorStore(initialState: Partial<EditorState> = {}) {
 		 */
 		exportState(): EditorState {
 			return structuredClone(state);
+		},
+
+		// Save actions
+
+		/**
+		 * Save the map to the database.
+		 * Creates a new user map via the API.
+		 * @returns Promise with the saved map ID
+		 */
+		async saveMap(): Promise<string> {
+			state.isSaving = true;
+
+			try {
+				const response = await fetch('/api/maps', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						title: state.title,
+						subtitle: state.subtitle,
+						people: state.people,
+						projection: state.view.projection,
+						rotation: state.view.rotation
+					})
+				});
+
+				if (!response.ok) {
+					const error = await response.json();
+					throw new Error(error.error || 'Failed to save map');
+				}
+
+				const data = await response.json();
+				state.userMapId = data.userMap.id;
+				state.isSaved = true;
+
+				return data.userMap.id;
+			} catch (error) {
+				console.error('Failed to save map:', error);
+				throw error;
+			} finally {
+				state.isSaving = false;
+			}
+		},
+
+		/**
+		 * Mark the map as unsaved (e.g., after editing).
+		 */
+		markUnsaved() {
+			state.isSaved = false;
 		}
 	};
 }

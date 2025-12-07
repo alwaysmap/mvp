@@ -7,6 +7,8 @@
 	 * - Interactive controls (rotation, zoom, pan)
 	 * - Page size selection with boundary overlay
 	 * - Real-time state updates
+	 * - Save map functionality
+	 * - Export to PNG workflow
 	 */
 
 	import { createMapEditorStore } from '$lib/stores/map-editor.svelte';
@@ -16,6 +18,22 @@
 	import PageSizeSelector from '$lib/components/PageSizeSelector.svelte';
 	import ProjectionSwitcher from '$lib/components/ProjectionSwitcher.svelte';
 	import PanControls from '$lib/components/PanControls.svelte';
+
+	let saveError = $state<string | null>(null);
+	let saveSuccess = $state(false);
+
+	async function handleSave() {
+		saveError = null;
+		saveSuccess = false;
+
+		try {
+			await store.saveMap();
+			saveSuccess = true;
+			setTimeout(() => (saveSuccess = false), 3000);
+		} catch (error) {
+			saveError = error instanceof Error ? error.message : 'Failed to save map';
+		}
+	}
 
 	// Create editor store with sample data
 	const store = createMapEditorStore({
@@ -115,6 +133,41 @@
 
 			<div class="control-section">
 				<PanControls {store} />
+			</div>
+
+			<!-- Save and Export Actions -->
+			<div class="action-section">
+				<h3>Actions</h3>
+
+				<button class="save-button" onclick={handleSave} disabled={store.state.isSaving}>
+					{#if store.state.isSaving}
+						Saving...
+					{:else if store.state.isSaved}
+						✓ Saved
+					{:else}
+						Save Map
+					{/if}
+				</button>
+
+				{#if saveSuccess}
+					<div class="success-message">Map saved successfully!</div>
+				{/if}
+
+				{#if saveError}
+					<div class="error-message">{saveError}</div>
+				{/if}
+
+				{#if store.state.userMapId}
+					<div class="map-id-info">Map ID: {store.state.userMapId.substring(0, 8)}...</div>
+				{/if}
+
+				<button
+					class="buy-button"
+					disabled={!store.state.isSaved}
+					title={!store.state.isSaved ? 'Please save your map first' : 'Generate print-ready PNG'}
+				>
+					Buy Print (Coming Soon)
+				</button>
 			</div>
 
 			<!-- Sample data info -->
@@ -221,6 +274,96 @@
 	.control-section {
 		padding: 1rem;
 		border-bottom: 1px solid #f0f0f0;
+	}
+
+	.action-section {
+		padding: 1.5rem;
+		border-bottom: 2px solid #e0e0e0;
+		background: #f8f9fa;
+	}
+
+	.action-section h3 {
+		font-size: 0.875rem;
+		font-weight: 600;
+		margin: 0 0 1rem 0;
+		color: #333;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.save-button,
+	.buy-button {
+		width: 100%;
+		padding: 0.875rem 1.5rem;
+		font-size: 1rem;
+		font-weight: 500;
+		border-radius: 6px;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		margin-bottom: 0.75rem;
+	}
+
+	.save-button {
+		background: #4a90e2;
+		color: white;
+	}
+
+	.save-button:hover:not(:disabled) {
+		background: #357abd;
+		transform: translateY(-1px);
+	}
+
+	.save-button:disabled {
+		background: #95c5f3;
+		cursor: not-allowed;
+	}
+
+	.buy-button {
+		background: #22c55e;
+		color: white;
+	}
+
+	.buy-button:hover:not(:disabled) {
+		background: #16a34a;
+		transform: translateY(-1px);
+	}
+
+	.buy-button:disabled {
+		background: #86efac;
+		cursor: not-allowed;
+		opacity: 0.6;
+	}
+
+	.success-message {
+		background: #d1fae5;
+		color: #065f46;
+		padding: 0.75rem;
+		border-radius: 4px;
+		font-size: 0.875rem;
+		margin-bottom: 0.75rem;
+		border: 1px solid #a7f3d0;
+	}
+
+	.error-message {
+		background: #fee2e2;
+		color: #991b1b;
+		padding: 0.75rem;
+		border-radius: 4px;
+		font-size: 0.875rem;
+		margin-bottom: 0.75rem;
+		border: 1px solid #fecaca;
+	}
+
+	.map-id-info {
+		background: #e0e7ff;
+		color: #3730a3;
+		padding: 0.5rem;
+		border-radius: 4px;
+		font-size: 0.75rem;
+		font-family: 'Courier New', monospace;
+		margin-bottom: 0.75rem;
+		text-align: center;
 	}
 
 	.info-section {
