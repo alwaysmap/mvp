@@ -261,7 +261,1469 @@ test('map preview renders with correct fonts', async ({ page }) => {
 
 ---
 
-### Phase 2: Interactive Controls & Globe Rotation (Days 6-8)
+### Phase 2: Data Architecture & Two-Route Workflow (Days 6-10)
+
+**Goal:** Separate map data editing from print configuration with persistent storage.
+
+#### Architectural Overview
+
+The system now separates concerns into two distinct routes and data models:
+
+```
+User Flow:
+1. /edit      → Create/edit migration map data
+2. /publish   → Configure print settings for a saved map
+
+Data Models:
+┌─────────────────────┐
+│   MigrationMap      │  ← Standalone, reusable
+│  ----------------   │
+│  - id               │
+│  - title            │
+│  - subtitle         │
+│  - people[]         │
+│  - projection       │
+│  - rotation         │
+│  - zoom             │
+│  - createdAt        │
+│  - updatedAt        │
+└─────────────────────┘
+         ▲
+         │ references (foreign key)
+         │
+┌─────────────────────┐
+│ PrintConfiguration  │  ← Print-specific settings
+│  ----------------   │
+│  - id               │
+│  - migrationMapId   │  ← FK to MigrationMap
+│  - pageSize         │
+│  - orientation      │
+│  - style            │
+│  - showBoundary     │
+│  - createdAt        │
+└─────────────────────┘
+```
+
+#### Key Design Principles
+
+1. **Separation of Concerns:**
+   - MigrationMap: Geographic data, locations, projection settings
+   - PrintConfiguration: Page layout, size, orientation, style
+
+2. **Reusability:**
+   - One MigrationMap can have multiple PrintConfigurations
+   - Enables future "view online only" without print
+   - Users can print same map at different sizes/orientations
+
+3. **Data Integrity:**
+   - PrintConfiguration MUST reference a MigrationMap (foreign key)
+   - Cannot have orphaned print configs
+   - MigrationMap can exist independently
+
+#### Tasks:
+
+##### 1. Database Schema Design (`src/lib/db/schema.ts`)
+
+**Simplified Schema - JSONB for Flexibility:**
+
+Following the principle of iteration speed, we store most data as JSONB. Only the 1:M relationship is explicitly modeled.
+
+**UserMap Table:**
+```typescript
+export interface UserMap {
+  id: string;                    // UUID primary key
+  data: {
+    // Map content
+    title: string;
+    subtitle: string;
+    people: Person[];
+
+    // View state
+    projection: ProjectionType;
+    rotation: [number, number, number];
+    zoom: number;
+    pan: [number, number];
+  };
+
+  // Metadata
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// These types define the structure within the JSONB data field
+export interface Person {
+  id: string;
+  name: string;
+  color?: string;
+  locations: Location[];
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  type: 'birth' | 'transit' | 'arrival' | 'death';
+  date?: string;
+}
+```
+
+**PrintableMap Table:**
+```typescript
+export interface PrintableMap {
+  id: string;                    // UUID primary key
+  userMapId: string;             // FK to user_maps.id (1:M relationship)
+  data: {
+    // Print settings
+    pageSize: PageSize;
+    orientation: 'portrait' | 'landscape';
+    style: 'vintage' | 'modern';
+    showBoundary: boolean;
+  };
+
+  // Metadata
+  createdAt: Date;
+}
+```
+
+**SQL Schema (PostgreSQL):**
+```sql
+-- User Maps table (core map data)
+CREATE TABLE user_maps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Everything stored as JSONB for iteration flexibility
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create GIN index for JSONB queries (e.g., searching by title)
+CREATE INDEX idx_user_maps_data ON user_maps USING GIN (data);
+
+-- Printable Maps table (1:M with user_maps)
+CREATE TABLE printable_maps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_map_id UUID NOT NULL REFERENCES user_maps(id) ON DELETE CASCADE,
+
+  -- Print config as JSONB
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  -- Index for lookups by user_map_id
+  INDEX idx_printable_maps_user_map (user_map_id)
+);
+
+-- Updated timestamp trigger
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER user_maps_updated_at
+  BEFORE UPDATE ON user_maps
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+```
+
+**Example Queries:**
+
+```sql
+-- Find maps by title (using JSONB query)
+SELECT * FROM user_maps
+WHERE data->>'title' ILIKE '%family%';
+
+-- Get all printable maps for a user map
+SELECT pm.* FROM printable_maps pm
+WHERE pm.user_map_id = 'some-uuid';
+
+-- Get printable map with its user map
+SELECT
+  um.data as map_data,
+  pm.data as print_data
+FROM printable_maps pm
+JOIN user_maps um ON um.id = pm.user_map_id
+WHERE pm.id = 'some-uuid';
+```
+
+##### 2. Database Client Setup (`src/lib/db/client.ts`)
+
+Using PostgreSQL with `pg` driver (boring, reliable choice):
+
+```typescript
+import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+export const db = {
+  query: (text: string, params?: any[]) => pool.query(text, params),
+
+  async transaction<T>(callback: (client: any) => Promise<T>): Promise<T> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+};
+```
+
+##### 3. Repository Layer (`src/lib/db/repositories/`)
+
+**UserMap Repository** (`user-maps.ts`):
+```typescript
+import type { UserMap } from '../schema';
+import { db } from '../client';
+
+export const userMapRepository = {
+  async create(data: UserMap['data']): Promise<UserMap> {
+    const result = await db.query(
+      `INSERT INTO user_maps (data)
+       VALUES ($1)
+       RETURNING id, data, created_at as "createdAt", updated_at as "updatedAt"`,
+      [JSON.stringify(data)]
+    );
+    return result.rows[0];
+  },
+
+  async findById(id: string): Promise<UserMap | null> {
+    const result = await db.query(
+      `SELECT id, data, created_at as "createdAt", updated_at as "updatedAt"
+       FROM user_maps WHERE id = $1`,
+      [id]
+    );
+    return result.rows[0] || null;
+  },
+
+  async update(id: string, data: UserMap['data']): Promise<UserMap> {
+    const result = await db.query(
+      `UPDATE user_maps SET data = $2 WHERE id = $1
+       RETURNING id, data, created_at as "createdAt", updated_at as "updatedAt"`,
+      [id, JSON.stringify(data)]
+    );
+    return result.rows[0];
+  },
+
+  async delete(id: string): Promise<void> {
+    await db.query('DELETE FROM user_maps WHERE id = $1', [id]);
+  },
+
+  async list(): Promise<UserMap[]> {
+    const result = await db.query(
+      `SELECT id, data, created_at as "createdAt", updated_at as "updatedAt"
+       FROM user_maps ORDER BY updated_at DESC`
+    );
+    return result.rows;
+  },
+
+  // JSONB query example - search by title
+  async searchByTitle(query: string): Promise<UserMap[]> {
+    const result = await db.query(
+      `SELECT id, data, created_at as "createdAt", updated_at as "updatedAt"
+       FROM user_maps
+       WHERE data->>'title' ILIKE $1
+       ORDER BY updated_at DESC`,
+      [`%${query}%`]
+    );
+    return result.rows;
+  }
+};
+```
+
+**PrintableMap Repository** (`printable-maps.ts`):
+```typescript
+import type { PrintableMap } from '../schema';
+import { db } from '../client';
+
+export const printableMapRepository = {
+  async create(userMapId: string, data: PrintableMap['data']): Promise<PrintableMap> {
+    const result = await db.query(
+      `INSERT INTO printable_maps (user_map_id, data)
+       VALUES ($1, $2)
+       RETURNING id, user_map_id as "userMapId", data, created_at as "createdAt"`,
+      [userMapId, JSON.stringify(data)]
+    );
+    return result.rows[0];
+  },
+
+  async findById(id: string): Promise<PrintableMap | null> {
+    const result = await db.query(
+      `SELECT id, user_map_id as "userMapId", data, created_at as "createdAt"
+       FROM printable_maps WHERE id = $1`,
+      [id]
+    );
+    return result.rows[0] || null;
+  },
+
+  async findByUserMapId(userMapId: string): Promise<PrintableMap[]> {
+    const result = await db.query(
+      `SELECT id, user_map_id as "userMapId", data, created_at as "createdAt"
+       FROM printable_maps
+       WHERE user_map_id = $1
+       ORDER BY created_at DESC`,
+      [userMapId]
+    );
+    return result.rows;
+  },
+
+  async update(id: string, data: PrintableMap['data']): Promise<PrintableMap> {
+    const result = await db.query(
+      `UPDATE printable_maps SET data = $2 WHERE id = $1
+       RETURNING id, user_map_id as "userMapId", data, created_at as "createdAt"`,
+      [id, JSON.stringify(data)]
+    );
+    return result.rows[0];
+  },
+
+  async delete(id: string): Promise<void> {
+    await db.query('DELETE FROM printable_maps WHERE id = $1', [id]);
+  },
+
+  // Helper to get printable map with its user map in one query
+  async findWithUserMap(id: string): Promise<{ printableMap: PrintableMap; userMap: UserMap } | null> {
+    const result = await db.query(
+      `SELECT
+         pm.id as pm_id,
+         pm.user_map_id,
+         pm.data as pm_data,
+         pm.created_at as pm_created_at,
+         um.id as um_id,
+         um.data as um_data,
+         um.created_at as um_created_at,
+         um.updated_at as um_updated_at
+       FROM printable_maps pm
+       JOIN user_maps um ON um.id = pm.user_map_id
+       WHERE pm.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    return {
+      printableMap: {
+        id: row.pm_id,
+        userMapId: row.user_map_id,
+        data: row.pm_data,
+        createdAt: row.pm_created_at
+      },
+      userMap: {
+        id: row.um_id,
+        data: row.um_data,
+        createdAt: row.um_created_at,
+        updatedAt: row.um_updated_at
+      }
+    };
+  }
+};
+```
+
+##### 4. Create Simplified MVP Routes
+
+**MVP Priority:** Focus on end-to-end export pipeline with preconfigured data, not full CRUD UI.
+
+**Edit Route** (`src/routes/edit/+page.svelte`) - **Simplified for MVP:**
+
+```svelte
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  import MapCanvas from '$lib/components/MapCanvas.svelte';
+  import ProjectionSwitcher from '$lib/components/ProjectionSwitcher.svelte';
+  import ZoomControls from '$lib/components/ZoomControls.svelte';
+  import RotationControls from '$lib/components/RotationControls.svelte';
+  import PanControls from '$lib/components/PanControls.svelte';
+  import PeopleEditor from '$lib/components/PeopleEditor.svelte';
+  import { createMapEditorStore } from '$lib/stores/map-editor.svelte';
+
+  // Extract map ID from query params (for editing existing map)
+  const mapId = $page.url.searchParams.get('id');
+
+  const store = createMapEditorStore();
+  let saving = $state(false);
+  let saveError = $state<string | null>(null);
+
+  onMount(async () => {
+    if (mapId) {
+      // Load existing map
+      const response = await fetch(`/api/maps/${mapId}`);
+      if (response.ok) {
+        const map = await response.json();
+        store.loadState({
+          title: map.title,
+          subtitle: map.subtitle,
+          people: map.people,
+          view: {
+            projection: map.projection,
+            rotation: map.rotation,
+            zoom: map.zoom,
+            pan: map.pan
+          }
+        });
+      }
+    }
+  });
+
+  async function handleSave() {
+    saving = true;
+    saveError = null;
+
+    try {
+      const state = store.exportState();
+
+      const response = await fetch(mapId ? `/api/maps/${mapId}` : '/api/maps', {
+        method: mapId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: state.title,
+          subtitle: state.subtitle,
+          people: state.people,
+          projection: state.view.projection,
+          rotation: state.view.rotation,
+          zoom: state.view.zoom,
+          pan: state.view.pan
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Save failed');
+      }
+
+      const result = await response.json();
+
+      // Redirect to publish page with saved map ID
+      goto(`/publish?mapId=${result.id}`);
+    } catch (err) {
+      saveError = err instanceof Error ? err.message : 'Unknown error';
+    } finally {
+      saving = false;
+    }
+  }
+</script>
+
+<div class="edit-page">
+  <header>
+    <h1>Edit Migration Map</h1>
+    <p class="subtitle">Add locations and people to your map</p>
+  </header>
+
+  <div class="editor-layout">
+    <!-- Map Canvas -->
+    <div class="canvas-container">
+      <MapCanvas {store} width={1200} height={800} interactive={true} />
+    </div>
+
+    <!-- Control Panel -->
+    <aside class="control-panel">
+      <div class="panel-section">
+        <h3>Map Details</h3>
+        <label>
+          Title
+          <input
+            type="text"
+            value={store.state.title}
+            oninput={(e) => store.setTitle(e.currentTarget.value)}
+          />
+        </label>
+        <label>
+          Subtitle
+          <input
+            type="text"
+            value={store.state.subtitle}
+            oninput={(e) => store.setSubtitle(e.currentTarget.value)}
+          />
+        </label>
+      </div>
+
+      <div class="panel-section">
+        <PeopleEditor {store} />
+      </div>
+
+      <div class="panel-section">
+        <ProjectionSwitcher {store} />
+      </div>
+
+      <div class="panel-section">
+        <ZoomControls {store} />
+      </div>
+
+      {#if store.state.view.projection === 'orthographic'}
+        <div class="panel-section">
+          <RotationControls {store} />
+        </div>
+      {:else}
+        <div class="panel-section">
+          <PanControls {store} />
+        </div>
+      {/if}
+
+      <div class="panel-section">
+        <button class="save-button" onclick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save & Continue to Print Setup'}
+        </button>
+
+        {#if saveError}
+          <p class="error">{saveError}</p>
+        {/if}
+      </div>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .edit-page {
+    min-height: 100vh;
+    background: #fafafa;
+  }
+
+  header {
+    padding: 2rem;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    margin: 0.5rem 0 0;
+    color: #666;
+  }
+
+  .editor-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 1rem;
+    padding: 1rem;
+    height: calc(100vh - 120px);
+  }
+
+  .canvas-container {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow: auto;
+  }
+
+  .control-panel {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+
+  .panel-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .panel-section:last-child {
+    border-bottom: none;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #555;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.875rem;
+  }
+
+  .save-button {
+    width: 100%;
+    padding: 0.75rem;
+    background: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .save-button:hover:not(:disabled) {
+    background: #357abd;
+  }
+
+  .save-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .error {
+    margin-top: 0.5rem;
+    color: #d32f2f;
+    font-size: 0.875rem;
+  }
+</style>
+```
+
+##### 5. Create Publish Route (`src/routes/publish/+page.svelte`)
+
+**Purpose:** Print configuration - page size, orientation, style
+
+```svelte
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import MapCanvas from '$lib/components/MapCanvas.svelte';
+  import PageSizeSelector from '$lib/components/PageSizeSelector.svelte';
+  import { createMapEditorStore } from '$lib/stores/map-editor.svelte';
+  import type { MigrationMap } from '$lib/db/schema';
+
+  const mapId = $page.url.searchParams.get('mapId');
+
+  const store = createMapEditorStore();
+  let migrationMap = $state<MigrationMap | null>(null);
+  let loading = $state(true);
+  let exporting = $state(false);
+  let exportError = $state<string | null>(null);
+
+  onMount(async () => {
+    if (!mapId) {
+      window.location.href = '/edit';
+      return;
+    }
+
+    // Load migration map
+    const response = await fetch(`/api/maps/${mapId}`);
+    if (response.ok) {
+      migrationMap = await response.json();
+
+      // Load map data into store (readonly view state)
+      store.loadState({
+        title: migrationMap.title,
+        subtitle: migrationMap.subtitle,
+        people: migrationMap.people,
+        view: {
+          projection: migrationMap.projection,
+          rotation: migrationMap.rotation,
+          zoom: migrationMap.zoom,
+          pan: migrationMap.pan
+        }
+      });
+    }
+
+    loading = false;
+  });
+
+  async function handleExport() {
+    if (!migrationMap) return;
+
+    exporting = true;
+    exportError = null;
+
+    try {
+      // Save print configuration
+      const printConfigResponse = await fetch('/api/print-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          migrationMapId: migrationMap.id,
+          pageSize: store.state.page.size,
+          orientation: store.state.page.size.includes('landscape') ? 'landscape' : 'portrait',
+          style: 'vintage', // TODO: make configurable
+          showBoundary: store.state.page.showBoundary
+        })
+      });
+
+      if (!printConfigResponse.ok) {
+        throw new Error('Failed to save print configuration');
+      }
+
+      const printConfig = await printConfigResponse.json();
+
+      // Trigger export job
+      const exportResponse = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printConfigId: printConfig.id
+        })
+      });
+
+      if (!exportResponse.ok) {
+        throw new Error('Export failed');
+      }
+
+      const blob = await exportResponse.blob();
+      const url = URL.createObjectURL(blob);
+
+      // Download PNG
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${migrationMap.title.replace(/\s+/g, '-')}.png`;
+      a.click();
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      exportError = err instanceof Error ? err.message : 'Unknown error';
+    } finally {
+      exporting = false;
+    }
+  }
+</script>
+
+{#if loading}
+  <div class="loading">Loading map...</div>
+{:else if !migrationMap}
+  <div class="error-page">
+    <h1>Map not found</h1>
+    <a href="/edit">Create a new map</a>
+  </div>
+{:else}
+  <div class="publish-page">
+    <header>
+      <h1>Configure Print Settings</h1>
+      <p class="subtitle">{migrationMap.title}</p>
+    </header>
+
+    <div class="publish-layout">
+      <!-- Print Preview -->
+      <div class="preview-container">
+        <MapCanvas {store} width={1200} height={800} interactive={false} />
+      </div>
+
+      <!-- Print Settings Panel -->
+      <aside class="settings-panel">
+        <div class="panel-section">
+          <PageSizeSelector {store} />
+        </div>
+
+        <div class="panel-section">
+          <h3>Export</h3>
+          <button class="export-button" onclick={handleExport} disabled={exporting}>
+            {exporting ? 'Exporting...' : 'Export for Print (300 DPI PNG)'}
+          </button>
+
+          {#if exportError}
+            <p class="error">{exportError}</p>
+          {/if}
+        </div>
+
+        <div class="panel-section">
+          <h3>Map Details</h3>
+          <dl>
+            <dt>Title:</dt>
+            <dd>{migrationMap.title}</dd>
+            <dt>Subtitle:</dt>
+            <dd>{migrationMap.subtitle}</dd>
+            <dt>Projection:</dt>
+            <dd>{migrationMap.projection}</dd>
+            <dt>People:</dt>
+            <dd>{migrationMap.people.length}</dd>
+          </dl>
+          <a href="/edit?id={migrationMap.id}" class="edit-link">Edit Map Data</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+{/if}
+
+<style>
+  /* Similar styling to edit page */
+  .publish-page {
+    min-height: 100vh;
+    background: #fafafa;
+  }
+
+  header {
+    padding: 2rem;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .publish-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 1rem;
+    padding: 1rem;
+    height: calc(100vh - 120px);
+  }
+
+  .preview-container {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow: auto;
+  }
+
+  .settings-panel {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+
+  .export-button {
+    width: 100%;
+    padding: 1rem;
+    background: #2e7d32;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .export-button:hover:not(:disabled) {
+    background: #1b5e20;
+  }
+
+  .export-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  dl {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  dt {
+    font-weight: 600;
+    margin-top: 0.5rem;
+  }
+
+  dd {
+    margin: 0.25rem 0 0 0;
+    color: #666;
+  }
+
+  .edit-link {
+    display: inline-block;
+    margin-top: 1rem;
+    color: #4a90e2;
+    text-decoration: none;
+    font-size: 0.875rem;
+  }
+
+  .edit-link:hover {
+    text-decoration: underline;
+  }
+</style>
+```
+
+##### 6. API Routes
+
+**Migration Maps API** (`src/routes/api/maps/+server.ts`):
+```typescript
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { migrationMapRepository } from '$lib/db/repositories/migration-maps';
+
+export const POST: RequestHandler = async ({ request }) => {
+  const data = await request.json();
+
+  const map = await migrationMapRepository.create({
+    userId: 'temp-user-id', // TODO: Get from auth session
+    title: data.title,
+    subtitle: data.subtitle,
+    people: data.people,
+    projection: data.projection,
+    rotation: data.rotation,
+    zoom: data.zoom,
+    pan: data.pan
+  });
+
+  return json(map, { status: 201 });
+};
+
+export const GET: RequestHandler = async () => {
+  // List all maps for user
+  const maps = await migrationMapRepository.listByUser('temp-user-id');
+  return json(maps);
+};
+```
+
+**Single Map API** (`src/routes/api/maps/[id]/+server.ts`):
+```typescript
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { migrationMapRepository } from '$lib/db/repositories/migration-maps';
+
+export const GET: RequestHandler = async ({ params }) => {
+  const map = await migrationMapRepository.findById(params.id);
+
+  if (!map) {
+    return json({ error: 'Not found' }, { status: 404 });
+  }
+
+  return json(map);
+};
+
+export const PUT: RequestHandler = async ({ params, request }) => {
+  const data = await request.json();
+
+  const updated = await migrationMapRepository.update(params.id, {
+    title: data.title,
+    subtitle: data.subtitle,
+    people: data.people,
+    projection: data.projection,
+    rotation: data.rotation,
+    zoom: data.zoom,
+    pan: data.pan
+  });
+
+  return json(updated);
+};
+
+export const DELETE: RequestHandler = async ({ params }) => {
+  await migrationMapRepository.delete(params.id);
+  return json({ success: true });
+};
+```
+
+**Print Configurations API** (`src/routes/api/print-configs/+server.ts`):
+```typescript
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { printConfigRepository } from '$lib/db/repositories/print-configurations';
+
+export const POST: RequestHandler = async ({ request }) => {
+  const data = await request.json();
+
+  const config = await printConfigRepository.create({
+    migrationMapId: data.migrationMapId,
+    pageSize: data.pageSize,
+    orientation: data.orientation,
+    style: data.style,
+    showBoundary: data.showBoundary
+  });
+
+  return json(config, { status: 201 });
+};
+```
+
+##### 7. Update Export Pipeline
+
+**Modified Export API** (`src/routes/api/export/+server.ts`):
+```typescript
+import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { printConfigRepository } from '$lib/db/repositories/print-configurations';
+import { migrationMapRepository } from '$lib/db/repositories/migration-maps';
+import { exportForPrintful } from '$lib/export/puppeteer';
+import { embedSRGBProfile } from '$lib/export/post-process';
+import { validateForPrintful } from '$lib/export/validate';
+import type { MapDefinition } from '$lib/map-renderer/types';
+
+export const POST: RequestHandler = async ({ request }) => {
+  const { printConfigId } = await request.json();
+
+  // Load print config and migration map
+  const printConfig = await printConfigRepository.findById(printConfigId);
+  if (!printConfig) {
+    return json({ error: 'Print config not found' }, { status: 404 });
+  }
+
+  const migrationMap = await migrationMapRepository.findById(printConfig.migrationMapId);
+  if (!migrationMap) {
+    return json({ error: 'Migration map not found' }, { status: 404 });
+  }
+
+  // Build MapDefinition from both models
+  const mapDefinition: MapDefinition = {
+    width: parsePageSize(printConfig.pageSize).width,
+    height: parsePageSize(printConfig.pageSize).height,
+    style: printConfig.style,
+    title: migrationMap.title,
+    subtitle: migrationMap.subtitle,
+    people: migrationMap.people,
+    projection: {
+      type: migrationMap.projection,
+      rotation: migrationMap.rotation,
+      zoom: migrationMap.zoom,
+      pan: migrationMap.pan
+    }
+  };
+
+  // Export pipeline
+  const screenshot = await exportForPrintful(mapDefinition);
+  const processed = await embedSRGBProfile(screenshot);
+  await validateForPrintful(processed, mapDefinition);
+
+  return new Response(processed, {
+    headers: {
+      'Content-Type': 'image/png',
+      'Content-Disposition': `attachment; filename="${migrationMap.title}.png"`
+    }
+  });
+};
+
+function parsePageSize(size: string): { width: number; height: number } {
+  // Parse "18x24" or "18x24-landscape"
+  const [dimensions] = size.split('-');
+  const [w, h] = dimensions.split('x').map(Number);
+  const isLandscape = size.includes('landscape');
+
+  return isLandscape ? { width: h, height: w } : { width: w, height: h };
+}
+```
+
+##### 8. People Editor Component (`src/lib/components/PeopleEditor.svelte`)
+
+```svelte
+<script lang="ts">
+  import type { MapEditorStore } from '$lib/stores/map-editor.svelte';
+  import type { Person, Location } from '$lib/db/schema';
+
+  interface Props {
+    store: MapEditorStore;
+  }
+
+  let { store }: Props = $props();
+
+  function addPerson() {
+    const newPerson: Person = {
+      id: crypto.randomUUID(),
+      name: 'New Person',
+      locations: []
+    };
+    store.addPerson(newPerson);
+  }
+
+  function addLocation(personId: string) {
+    const person = store.state.people.find(p => p.id === personId);
+    if (!person) return;
+
+    const newLocation: Location = {
+      id: crypto.randomUUID(),
+      name: 'New Location',
+      latitude: 0,
+      longitude: 0,
+      type: 'transit'
+    };
+
+    store.updatePerson(personId, {
+      locations: [...person.locations, newLocation]
+    });
+  }
+
+  function removePerson(id: string) {
+    store.removePerson(id);
+  }
+
+  function updatePersonName(id: string, name: string) {
+    store.updatePerson(id, { name });
+  }
+
+  function updateLocation(personId: string, locationId: string, updates: Partial<Location>) {
+    const person = store.state.people.find(p => p.id === personId);
+    if (!person) return;
+
+    const updatedLocations = person.locations.map(loc =>
+      loc.id === locationId ? { ...loc, ...updates } : loc
+    );
+
+    store.updatePerson(personId, { locations: updatedLocations });
+  }
+
+  function removeLocation(personId: string, locationId: string) {
+    const person = store.state.people.find(p => p.id === personId);
+    if (!person) return;
+
+    store.updatePerson(personId, {
+      locations: person.locations.filter(loc => loc.id !== locationId)
+    });
+  }
+</script>
+
+<div class="people-editor">
+  <h3>People & Locations</h3>
+
+  {#each store.state.people as person (person.id)}
+    <div class="person-card">
+      <div class="person-header">
+        <input
+          type="text"
+          value={person.name}
+          oninput={(e) => updatePersonName(person.id, e.currentTarget.value)}
+          class="person-name"
+        />
+        <button onclick={() => removePerson(person.id)} class="remove-btn">×</button>
+      </div>
+
+      <div class="locations">
+        {#each person.locations as location (location.id)}
+          <div class="location-item">
+            <input
+              type="text"
+              value={location.name}
+              oninput={(e) => updateLocation(person.id, location.id, { name: e.currentTarget.value })}
+              placeholder="Location name"
+            />
+            <div class="coords">
+              <input
+                type="number"
+                value={location.latitude}
+                oninput={(e) => updateLocation(person.id, location.id, { latitude: parseFloat(e.currentTarget.value) })}
+                placeholder="Lat"
+                step="0.1"
+              />
+              <input
+                type="number"
+                value={location.longitude}
+                oninput={(e) => updateLocation(person.id, location.id, { longitude: parseFloat(e.currentTarget.value) })}
+                placeholder="Lng"
+                step="0.1"
+              />
+            </div>
+            <button onclick={() => removeLocation(person.id, location.id)} class="remove-location">×</button>
+          </div>
+        {/each}
+
+        <button onclick={() => addLocation(person.id)} class="add-location">
+          + Add Location
+        </button>
+      </div>
+    </div>
+  {/each}
+
+  <button onclick={addPerson} class="add-person">+ Add Person</button>
+</div>
+
+<style>
+  .people-editor {
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .person-card {
+    background: #f5f5f5;
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .person-header {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .person-name {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .location-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .location-item input[type="text"] {
+    grid-column: 1 / -1;
+  }
+
+  .coords {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  input[type="number"] {
+    padding: 0.375rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.75rem;
+  }
+
+  .remove-btn,
+  .remove-location {
+    background: #d32f2f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .add-location,
+  .add-person {
+    width: 100%;
+    padding: 0.5rem;
+    background: white;
+    border: 1px dashed #4a90e2;
+    border-radius: 4px;
+    color: #4a90e2;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .add-location:hover,
+  .add-person:hover {
+    background: #f0f7ff;
+  }
+</style>
+```
+
+#### Testing Strategy:
+
+**Unit Tests** (`tests/unit/repositories.test.ts`):
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { migrationMapRepository } from '$lib/db/repositories/migration-maps';
+import { printConfigRepository } from '$lib/db/repositories/print-configurations';
+
+describe('MigrationMap Repository', () => {
+  it('creates a new migration map', async () => {
+    const map = await migrationMapRepository.create({
+      userId: 'test-user',
+      title: 'Test Map',
+      subtitle: 'Test',
+      people: [],
+      projection: 'orthographic',
+      rotation: [0, 0, 0],
+      zoom: 1.0,
+      pan: [0, 0]
+    });
+
+    expect(map.id).toBeDefined();
+    expect(map.title).toBe('Test Map');
+    expect(map.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('updates migration map', async () => {
+    const map = await migrationMapRepository.create({ /* ... */ });
+    const updated = await migrationMapRepository.update(map.id, {
+      title: 'Updated Title'
+    });
+
+    expect(updated.title).toBe('Updated Title');
+    expect(updated.updatedAt).not.toEqual(map.updatedAt);
+  });
+});
+
+describe('PrintConfiguration Repository', () => {
+  it('creates print config with valid map reference', async () => {
+    const map = await migrationMapRepository.create({ /* ... */ });
+    const printConfig = await printConfigRepository.create({
+      migrationMapId: map.id,
+      pageSize: '18x24',
+      orientation: 'portrait',
+      style: 'vintage',
+      showBoundary: true
+    });
+
+    expect(printConfig.id).toBeDefined();
+    expect(printConfig.migrationMapId).toBe(map.id);
+  });
+
+  it('fails to create print config with invalid map ID', async () => {
+    await expect(
+      printConfigRepository.create({
+        migrationMapId: 'non-existent-id',
+        pageSize: '18x24',
+        orientation: 'portrait',
+        style: 'vintage',
+        showBoundary: true
+      })
+    ).rejects.toThrow(); // Foreign key violation
+  });
+});
+```
+
+**E2E Tests** (`tests/e2e/two-route-workflow.test.ts`):
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('Two-Route Workflow', () => {
+  test('complete flow from edit to publish', async ({ page }) => {
+    // Start at edit page
+    await page.goto('/edit');
+
+    // Add title and subtitle
+    await page.fill('input[placeholder*="Title"]', 'Our Family Journey');
+    await page.fill('input[placeholder*="Subtitle"]', '2010-2024');
+
+    // Add a person
+    await page.click('button:has-text("Add Person")');
+    await page.fill('.person-name', 'Alice');
+
+    // Add a location
+    await page.click('button:has-text("Add Location")');
+    await page.fill('input[placeholder="Location name"]', 'New York');
+    await page.fill('input[placeholder="Lat"]', '40.7128');
+    await page.fill('input[placeholder="Lng"]', '-74.0060');
+
+    // Save and continue
+    await page.click('button:has-text("Save & Continue")');
+
+    // Should redirect to publish page
+    await expect(page).toHaveURL(/\/publish\?mapId=/);
+
+    // Check map loaded
+    await expect(page.locator('h1')).toContainText('Configure Print Settings');
+    await expect(page.locator('.subtitle')).toContainText('Our Family Journey');
+
+    // Change page size
+    await page.selectOption('#paper-size', 'A3');
+
+    // Export
+    const downloadPromise = page.waitForEvent('download');
+    await page.click('button:has-text("Export for Print")');
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(/Our-Family-Journey\.png/);
+  });
+
+  test('can edit map from publish page', async ({ page }) => {
+    // Create a map first
+    await page.goto('/edit');
+    await page.fill('input[placeholder*="Title"]', 'Test Map');
+    await page.click('button:has-text("Save & Continue")');
+
+    // Should be on publish page
+    await expect(page).toHaveURL(/\/publish\?mapId=/);
+
+    // Click edit link
+    await page.click('a:has-text("Edit Map Data")');
+
+    // Should return to edit page with map ID
+    await expect(page).toHaveURL(/\/edit\?id=/);
+
+    // Map data should be loaded
+    await expect(page.locator('input[value="Test Map"]')).toBeVisible();
+  });
+
+  test('publish page requires valid map ID', async ({ page }) => {
+    // Try to access publish without map ID
+    await page.goto('/publish');
+
+    // Should redirect to edit
+    await expect(page).toHaveURL('/edit');
+  });
+
+  test('print config references migration map', async ({ page }) => {
+    // Create map and export
+    await page.goto('/edit');
+    await page.fill('input[placeholder*="Title"]', 'Reference Test');
+    await page.click('button:has-text("Save & Continue")');
+
+    const url = new URL(page.url());
+    const mapId = url.searchParams.get('mapId');
+
+    // Export to create print config
+    await page.click('button:has-text("Export for Print")');
+
+    // Verify print config exists via API
+    const printConfigsResponse = await page.request.get(`/api/print-configs?mapId=${mapId}`);
+    const printConfigs = await printConfigsResponse.json();
+
+    expect(printConfigs.length).toBeGreaterThan(0);
+    expect(printConfigs[0].migrationMapId).toBe(mapId);
+  });
+});
+```
+
+#### Docker Compose Update:
+
+Add PostgreSQL service:
+
+```yaml
+services:
+  app:
+    # ... existing config
+    environment:
+      DATABASE_URL: postgres://awm:password@db:5432/awm
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    # ... existing config
+    environment:
+      DATABASE_URL: postgres://awm:password@db:5432/awm
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: awm
+      POSTGRES_USER: awm
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres-data:
+```
+
+#### Success Criteria:
+
+- ✅ PostgreSQL database set up with two tables
+- ✅ Foreign key constraint enforced (print config → migration map)
+- ✅ `/edit` route allows creating/editing migration maps
+- ✅ `/publish` route loads existing map and configures print settings
+- ✅ API routes for CRUD operations on both models
+- ✅ Export pipeline builds MapDefinition from both models
+- ✅ E2E test validates complete flow from edit → save → publish → export
+- ✅ Can return to edit from publish page
+- ✅ Repository pattern isolates database logic
+- ✅ All unit tests pass
+- ✅ All E2E tests pass
+
+---
+
+### Phase 3: Interactive Controls & Globe Rotation (Days 11-13)
 
 **Goal:** User can configure map parameters and rotate globe interactively.
 

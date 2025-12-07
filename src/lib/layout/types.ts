@@ -77,9 +77,33 @@ export interface UserMapData {
 // ============================================================================
 
 /**
- * Standard page sizes (Printful poster sizes).
+ * Standard page sizes (Printful and common POD poster sizes).
+ * USA portrait: 8x10, 12x16, 18x24, 24x36
+ * USA landscape: 10x8, 16x12, 24x18, 36x24
+ * International portrait: A4, A3, A2, A1
+ * International landscape: A4-landscape, A3-landscape, A2-landscape, A1-landscape
  */
-export type PageSize = '12x16' | '18x24' | '24x36';
+export type PageSize =
+	// USA Portrait
+	| '8x10'
+	| '12x16'
+	| '18x24'
+	| '24x36'
+	// USA Landscape
+	| '10x8'
+	| '16x12'
+	| '24x18'
+	| '36x24'
+	// International Portrait
+	| 'A4'
+	| 'A3'
+	| 'A2'
+	| 'A1'
+	// International Landscape
+	| 'A4-landscape'
+	| 'A3-landscape'
+	| 'A2-landscape'
+	| 'A1-landscape';
 
 /**
  * Page orientation.

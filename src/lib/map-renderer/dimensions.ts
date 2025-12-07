@@ -6,30 +6,146 @@
 import type { PrintSpec, Dimensions } from './types.js';
 
 /**
- * Standard print specifications for common Printful poster sizes.
+ * Standard print specifications for common print-on-demand poster sizes.
+ * Includes USA (inches) and international (A-series) sizes in both portrait and landscape.
  * All dimensions in points (pt), where 1 pt = 1/72 inch.
+ *
+ * Based on common sizes from Printful and other POD services:
+ * - USA: 8×10", 12×16", 18×24", 24×36"
+ * - International: A4, A3, A2, A1
  */
 export const PRINT_SPECS: Record<string, PrintSpec> = {
-	'18x24': {
-		productName: 'Premium Poster - 18×24"',
-		trimWidth: 18 * 72, // 1296 pt
-		trimHeight: 24 * 72, // 1728 pt
+	// USA Portrait Sizes
+	'8x10': {
+		productName: 'Premium Poster - 8×10" (Portrait)',
+		trimWidth: 8 * 72, // 576 pt
+		trimHeight: 10 * 72, // 720 pt
 		bleed: 0.125 * 72, // 9 pt (1/8 inch)
 		safeMargin: 0.25 * 72, // 18 pt (1/4 inch)
 		dpi: 300
 	},
+	'12x16': {
+		productName: 'Premium Poster - 12×16" (Portrait)',
+		trimWidth: 12 * 72, // 864 pt
+		trimHeight: 16 * 72, // 1152 pt
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'18x24': {
+		productName: 'Premium Poster - 18×24" (Portrait)',
+		trimWidth: 18 * 72, // 1296 pt
+		trimHeight: 24 * 72, // 1728 pt
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
 	'24x36': {
-		productName: 'Premium Poster - 24×36"',
+		productName: 'Premium Poster - 24×36" (Portrait)',
 		trimWidth: 24 * 72, // 1728 pt
 		trimHeight: 36 * 72, // 2592 pt
 		bleed: 0.125 * 72, // 9 pt
 		safeMargin: 0.25 * 72, // 18 pt
 		dpi: 300
 	},
-	'12x16': {
-		productName: 'Premium Poster - 12×16"',
-		trimWidth: 12 * 72, // 864 pt
-		trimHeight: 16 * 72, // 1152 pt
+
+	// USA Landscape Sizes
+	'10x8': {
+		productName: 'Premium Poster - 10×8" (Landscape)',
+		trimWidth: 10 * 72, // 720 pt
+		trimHeight: 8 * 72, // 576 pt
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'16x12': {
+		productName: 'Premium Poster - 16×12" (Landscape)',
+		trimWidth: 16 * 72, // 1152 pt
+		trimHeight: 12 * 72, // 864 pt
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'24x18': {
+		productName: 'Premium Poster - 24×18" (Landscape)',
+		trimWidth: 24 * 72, // 1728 pt
+		trimHeight: 18 * 72, // 1296 pt
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'36x24': {
+		productName: 'Premium Poster - 36×24" (Landscape)',
+		trimWidth: 36 * 72, // 2592 pt
+		trimHeight: 24 * 72, // 1728 pt
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+
+	// International A-Series Portrait
+	'A4': {
+		productName: 'Premium Poster - A4 (Portrait)',
+		trimWidth: 8.27 * 72, // 595.4 pt (210mm)
+		trimHeight: 11.69 * 72, // 841.7 pt (297mm)
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'A3': {
+		productName: 'Premium Poster - A3 (Portrait)',
+		trimWidth: 11.69 * 72, // 841.7 pt (297mm)
+		trimHeight: 16.54 * 72, // 1190.9 pt (420mm)
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'A2': {
+		productName: 'Premium Poster - A2 (Portrait)',
+		trimWidth: 16.54 * 72, // 1190.9 pt (420mm)
+		trimHeight: 23.38 * 72, // 1683.4 pt (594mm)
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'A1': {
+		productName: 'Premium Poster - A1 (Portrait)',
+		trimWidth: 23.38 * 72, // 1683.4 pt (594mm)
+		trimHeight: 33.08 * 72, // 2381.8 pt (841mm)
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+
+	// International A-Series Landscape
+	'A4-landscape': {
+		productName: 'Premium Poster - A4 (Landscape)',
+		trimWidth: 11.69 * 72, // 841.7 pt (297mm)
+		trimHeight: 8.27 * 72, // 595.4 pt (210mm)
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'A3-landscape': {
+		productName: 'Premium Poster - A3 (Landscape)',
+		trimWidth: 16.54 * 72, // 1190.9 pt (420mm)
+		trimHeight: 11.69 * 72, // 841.7 pt (297mm)
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'A2-landscape': {
+		productName: 'Premium Poster - A2 (Landscape)',
+		trimWidth: 23.38 * 72, // 1683.4 pt (594mm)
+		trimHeight: 16.54 * 72, // 1190.9 pt (420mm)
+		bleed: 0.125 * 72, // 9 pt
+		safeMargin: 0.25 * 72, // 18 pt
+		dpi: 300
+	},
+	'A1-landscape': {
+		productName: 'Premium Poster - A1 (Landscape)',
+		trimWidth: 33.08 * 72, // 2381.8 pt (841mm)
+		trimHeight: 23.38 * 72, // 1683.4 pt (594mm)
 		bleed: 0.125 * 72, // 9 pt
 		safeMargin: 0.25 * 72, // 18 pt
 		dpi: 300

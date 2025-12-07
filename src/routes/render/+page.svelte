@@ -49,8 +49,24 @@
 
 			renderStatus = 'Loading fonts...';
 
+			// Determine print spec from layout configuration or default to 18x24
+			let printSpec = PRINT_SPECS['18x24']; // Default
+			if (mapDef.layout?.page.size) {
+				const sizeKey = mapDef.layout.page.size;
+				console.log('Requested size:', sizeKey);
+				console.log('Available PRINT_SPECS keys:', Object.keys(PRINT_SPECS));
+				if (PRINT_SPECS[sizeKey]) {
+					printSpec = PRINT_SPECS[sizeKey];
+				} else {
+					errorMessage = `Unknown page size: ${sizeKey}. Available: ${Object.keys(PRINT_SPECS).join(', ')}`;
+					renderStatus = 'Error';
+					(window as any).__RENDER_ERROR__ = errorMessage;
+					return;
+				}
+			}
+
 			// Render at full 300 DPI resolution
-			const result = await renderMap(mapDef, PRINT_SPECS['18x24'], {
+			const result = await renderMap(mapDef, printSpec, {
 				selector: '#map-svg',
 				interactive: false // No interaction in Puppeteer mode
 			});
@@ -108,15 +124,14 @@
 	.render-container {
 		width: 100vw;
 		height: 100vh;
-		display: flex;
-		align-items: center;
-		justify-content: center;
 		position: relative;
+		overflow: hidden;
 	}
 
 	#map-svg {
-		max-width: 100%;
-		max-height: 100%;
+		display: block;
+		width: 100%;
+		height: 100%;
 	}
 
 	/* Status overlay - positioned off-screen for screenshot */

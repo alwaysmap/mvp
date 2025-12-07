@@ -26,11 +26,29 @@ import type {
 
 /**
  * Page size dimensions in inches.
+ * Supports USA (inches), International (A-series), in both portrait and landscape.
  */
 const PAGE_SIZES: Record<string, { width: number; height: number }> = {
+	// USA Portrait
+	'8x10': { width: 8, height: 10 },
 	'12x16': { width: 12, height: 16 },
 	'18x24': { width: 18, height: 24 },
-	'24x36': { width: 24, height: 36 }
+	'24x36': { width: 24, height: 36 },
+	// USA Landscape
+	'10x8': { width: 10, height: 8 },
+	'16x12': { width: 16, height: 12 },
+	'24x18': { width: 24, height: 18 },
+	'36x24': { width: 36, height: 24 },
+	// International Portrait (A-series in inches, converted from mm)
+	'A4': { width: 8.27, height: 11.69 }, // 210×297mm
+	'A3': { width: 11.69, height: 16.54 }, // 297×420mm
+	'A2': { width: 16.54, height: 23.38 }, // 420×594mm
+	'A1': { width: 23.38, height: 33.08 }, // 594×841mm
+	// International Landscape
+	'A4-landscape': { width: 11.69, height: 8.27 },
+	'A3-landscape': { width: 16.54, height: 11.69 },
+	'A2-landscape': { width: 23.38, height: 16.54 },
+	'A1-landscape': { width: 33.08, height: 23.38 }
 };
 
 /**
@@ -159,6 +177,10 @@ export function calculateSafeArea(page: PageDimensions, spec: PageSpec): SafeAre
 
 /**
  * Calculates space required by furniture.
+ *
+ * IMPORTANT: Furniture is positioned in CORNERS, not center!
+ * So it doesn't reduce available map space - it just needs margins.
+ * We only need a small margin to keep furniture from touching map.
  */
 function calculateFurnitureSpace(
 	furniture: PageLayout['furniture'],
@@ -168,30 +190,13 @@ function calculateFurnitureSpace(
 	reservedHeight: number;
 	margin: number;
 } {
-	// For now, we use a simple heuristic:
-	// - Title block: 200pt wide × 100pt tall
-	// - QR code: size from config
-	// - Attribution: 200pt wide × 20pt tall
-	// - Margin between furniture and map: 18pt
+	const margin = 36; // Small margin between furniture and map
 
-	const margin = 18; // points
-
-	// Calculate title block size (approximate - will be refined in positioning)
-	const titleHeight = 100; // Rough estimate
-
-	// Calculate QR code size
-	const qrSize = furniture.qrCode.size;
-
-	// Calculate attribution size (if present)
-	const attrHeight = furniture.attribution ? 20 : 0;
-
-	// Total reserved height depends on furniture positions
-	// For simplicity, reserve space for largest furniture item + margin
-	const maxFurnitureHeight = Math.max(titleHeight, qrSize, attrHeight);
-
+	// Furniture is in corners, so it doesn't reduce the center map space
+	// We just need small margins on all sides
 	return {
-		reservedWidth: margin * 2, // Margins on both sides
-		reservedHeight: maxFurnitureHeight + margin * 2, // Furniture + margins
+		reservedWidth: margin * 2, // Small margins on left/right
+		reservedHeight: margin * 2, // Small margins on top/bottom
 		margin
 	};
 }

@@ -21,7 +21,7 @@ import { validatePNG, validateMapDefinition } from '../src/lib/export/validate.j
 import { PRINT_SPECS } from '../src/lib/map-renderer/dimensions.js';
 import type { MapDefinition } from '../src/lib/map-renderer/types.js';
 import { DEFAULT_PAGE_SPEC, DEFAULT_MAP_PLACEMENT } from '../src/lib/layout/index.js';
-import type { PageLayout } from '../src/lib/layout/types.js';
+import type { PageLayout, PageSize } from '../src/lib/layout/types.js';
 
 /**
  * Waits for the HTTP server to be ready by attempting to connect.
@@ -166,27 +166,25 @@ async function main() {
 AlwaysMap Export Tool
 
 Usage:
-  pnpm export <input.json> <output.png> [--size 18x24] [--layout]
-  pnpm export --sample <output.png> [--size 18x24] [--layout]
+  pnpm export <input.json> <output.png> [--size 18x24]
+  pnpm export --sample <output.png> [--size 18x24]
 
 Arguments:
   input.json    Path to JSON file containing MapDefinition
   output.png    Path where PNG file will be saved
   --sample      Use built-in sample map instead of reading input file
   --size        Print size: 12x16, 18x24, 24x36 (default: 18x24)
-  --layout      Enable new layout engine for optimal map fill (⭐ NEW)
 
 Examples:
   pnpm export data/my-map.json output/map.png
-  pnpm export --sample test.png --layout
-  pnpm export --sample test.png --size 24x36 --layout
+  pnpm export --sample test.png
+  pnpm export --sample test.png --size 24x36
 
 Layout Engine:
-  --layout flag enables the new layout calculation engine which:
-  - Maximizes map fill (80-85% vs 20-25% legacy)
+  The layout engine is always enabled and:
+  - Maximizes map fill (80-85% of page area)
   - Calculates optimal globe size and positioning
-  - Places furniture (title, QR code) intelligently
-  - Backward compatible: without --layout, uses legacy positioning
+  - Places furniture (title, QR code) intelligently in corners
 
 Note: The dev server must be running (pnpm dev) for export to work.
 		`);
@@ -196,12 +194,10 @@ Note: The dev server must be running (pnpm dev) for export to work.
 	let mapDefinition: MapDefinition;
 	let outputPath: string;
 	let printSize = '18x24';
-	let useLayoutEngine = false;
 
 	// Parse arguments
 	const useSample = args.includes('--sample');
 	const sizeIndex = args.indexOf('--size');
-	useLayoutEngine = args.includes('--layout');
 
 	if (sizeIndex !== -1 && args[sizeIndex + 1]) {
 		printSize = args[sizeIndex + 1];
@@ -269,39 +265,37 @@ Note: The dev server must be running (pnpm dev) for export to work.
 
 	console.log('✓ Map definition valid');
 
-	// Add layout configuration if requested
-	if (useLayoutEngine) {
-		console.log('🎨 Enabling layout engine...');
+	// Add layout configuration (always enabled)
+	console.log('🎨 Configuring layout engine...');
 
-		const layout: PageLayout = {
-			page: {
-				size: printSize as '12x16' | '18x24' | '24x36',
-				orientation: 'portrait',
-				dpi: printSpec.dpi,
-				bleed: printSpec.bleed,
-				safeMargin: printSpec.safeMargin
+	const layout: PageLayout = {
+		page: {
+			size: printSize as PageSize,
+			orientation: 'portrait',
+			dpi: printSpec.dpi,
+			bleed: printSpec.bleed,
+			safeMargin: printSpec.safeMargin
+		},
+		mapPlacement: DEFAULT_MAP_PLACEMENT,
+		furniture: {
+			title: {
+				text: mapDefinition.title,
+				subtitle: mapDefinition.subtitle,
+				position: 'top-left',
+				fontFamily: 'Cormorant Garamond',
+				titleFontSize: 36,
+				subtitleFontSize: 24
 			},
-			mapPlacement: DEFAULT_MAP_PLACEMENT,
-			furniture: {
-				title: {
-					text: mapDefinition.title,
-					subtitle: mapDefinition.subtitle,
-					position: 'top-left',
-					fontFamily: 'Cormorant Garamond',
-					titleFontSize: 36,
-					subtitleFontSize: 24
-				},
-				qrCode: {
-					url: 'https://alwaysmap.com',
-					position: 'bottom-right',
-					size: 72
-				}
+			qrCode: {
+				url: 'https://alwaysmap.com',
+				position: 'bottom-right',
+				size: 72
 			}
-		};
+		}
+	};
 
-		mapDefinition.layout = layout;
-		console.log('✓ Layout configuration added');
-	}
+	mapDefinition.layout = layout;
+	console.log('✓ Layout configuration added');
 
 	// Start server and export
 	console.log('');

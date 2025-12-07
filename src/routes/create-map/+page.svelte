@@ -1,15 +1,24 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { renderMap, PRINT_SPECS, type MapDefinition } from '$lib/map-renderer';
+	/**
+	 * Create Map Page - Interactive Map Editor
+	 *
+	 * Provides a full-featured map editor with:
+	 * - Live D3 map preview
+	 * - Interactive controls (rotation, zoom, pan)
+	 * - Page size selection with boundary overlay
+	 * - Real-time state updates
+	 */
 
-	let renderStatus = $state('Initializing...');
-	let errorMessage = $state('');
-	let containerWidth = $state(0);
-	let containerHeight = $state(0);
-	let mapContainer: HTMLDivElement;
+	import { createMapEditorStore } from '$lib/stores/map-editor.svelte';
+	import MapCanvas from '$lib/components/MapCanvas.svelte';
+	import RotationControls from '$lib/components/RotationControls.svelte';
+	import ZoomControls from '$lib/components/ZoomControls.svelte';
+	import PageSizeSelector from '$lib/components/PageSizeSelector.svelte';
+	import ProjectionSwitcher from '$lib/components/ProjectionSwitcher.svelte';
+	import PanControls from '$lib/components/PanControls.svelte';
 
-	// Sample map data
-	const sampleMap: MapDefinition = {
+	// Create editor store with sample data
+	const store = createMapEditorStore({
 		title: 'Our Family Journey',
 		subtitle: '2010-2024',
 		people: [
@@ -63,55 +72,7 @@
 					}
 				]
 			}
-		],
-		rotation: [-20, -30, 0]
-	};
-
-	async function render() {
-		try {
-			renderStatus = 'Loading fonts...';
-
-			const result = await renderMap(sampleMap, PRINT_SPECS['18x24'], {
-				selector: '#map-svg',
-				interactive: true  // Enable interactive rotation
-				// backgroundColor uses default antique parchment color from styles.ts
-			});
-
-			if (result.success) {
-				renderStatus = 'Render complete!';
-				console.log('Map rendered successfully:', result);
-			} else {
-				renderStatus = 'Render failed';
-				errorMessage = result.error || 'Unknown error';
-				console.error('Render failed:', result.error);
-			}
-		} catch (error) {
-			renderStatus = 'Error occurred';
-			errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			console.error('Exception during render:', error);
-		}
-	}
-
-	onMount(() => {
-		// Get initial container dimensions
-		if (mapContainer) {
-			containerWidth = mapContainer.clientWidth;
-			containerHeight = mapContainer.clientHeight;
-		}
-
-		// Render the map
-		render();
-
-		// Handle window resize
-		const handleResize = () => {
-			if (mapContainer) {
-				containerWidth = mapContainer.clientWidth;
-				containerHeight = mapContainer.clientHeight;
-			}
-		};
-
-		window.addEventListener('resize', handleResize);
-		return () => window.removeEventListener('resize', handleResize);
+		]
 	});
 </script>
 
@@ -119,51 +80,56 @@
 	<title>Create Your Map - AlwaysMap</title>
 </svelte:head>
 
-<div class="container">
-	<header>
+<div class="page-layout">
+	<header class="page-header">
 		<a href="/" class="back-link">← Back to Home</a>
-		<h1>Create Your Map</h1>
-		<p class="subtitle">Sample visualization with the D3 map renderer</p>
+		<h1>Map Editor</h1>
+		<p class="subtitle">Interactive map preview with live controls</p>
 	</header>
 
-	<div class="status-bar">
-		<span class="status-label">Status:</span>
-		<span class="status-value" class:error={errorMessage}>{renderStatus}</span>
-		{#if errorMessage}
-			<div class="error-message">{errorMessage}</div>
-		{/if}
-	</div>
+	<div class="editor-layout">
+		<!-- Main map canvas area -->
+		<div class="canvas-area">
+			<MapCanvas {store} width={1200} height={800} />
+		</div>
 
-	<div class="map-container" bind:this={mapContainer}>
-		<svg id="map-svg"></svg>
-	</div>
+		<!-- Control panel sidebar -->
+		<aside class="control-panel">
+			<h2 class="panel-title">Controls</h2>
 
-	<div class="info-panel">
-		<h2>Render Details</h2>
-		<ul>
-			<li><strong>Print Size:</strong> 18×24" (Premium Poster)</li>
-			<li><strong>Resolution:</strong> 300 DPI (5475×7275 pixels)</li>
-			<li><strong>Bleed:</strong> 0.125" (9pt)</li>
-			<li><strong>Safe Margin:</strong> 0.25" (18pt)</li>
-			<li><strong>Projection:</strong> Orthographic (Globe view)</li>
-		</ul>
+			<div class="control-section">
+				<ProjectionSwitcher {store} />
+			</div>
 
-		<h2>Sample Data</h2>
-		<ul>
-			<li><strong style="color: #FF6B6B;">●</strong> Alice: New York → London → Tokyo</li>
-			<li><strong style="color: #4ECDC4;">●</strong> Bob: Toronto → Paris → Sydney</li>
-		</ul>
+			<div class="control-section">
+				<PageSizeSelector {store} />
+			</div>
 
-		<h2>Features Demonstrated</h2>
-		<ul>
-			<li>✓ Framework-agnostic D3 rendering</li>
-			<li>✓ Title box with custom fonts (Cormorant Garamond)</li>
-			<li>✓ QR code overlay (bottom-right)</li>
-			<li>✓ Geographic projection with rotation</li>
-			<li>✓ Migration paths between locations</li>
-			<li>✓ Location markers (dots)</li>
-			<li>✓ Bleed and safe area calculations</li>
-		</ul>
+			<div class="control-section">
+				<ZoomControls {store} />
+			</div>
+
+			<div class="control-section">
+				<RotationControls {store} />
+			</div>
+
+			<div class="control-section">
+				<PanControls {store} />
+			</div>
+
+			<!-- Sample data info -->
+			<div class="info-section">
+				<h3>Sample Data</h3>
+				<div class="person-info">
+					<span class="person-dot" style="background: #FF6B6B;"></span>
+					<span>Alice: NY → London → Tokyo</span>
+				</div>
+				<div class="person-info">
+					<span class="person-dot" style="background: #4ECDC4;"></span>
+					<span>Bob: Toronto → Paris → Sydney</span>
+				</div>
+			</div>
+		</aside>
 	</div>
 </div>
 
@@ -176,150 +142,139 @@
 		overflow-x: hidden;
 	}
 
-	.container {
-		max-width: 1400px;
-		margin: 0 auto;
-		padding: 1rem;
-		box-sizing: border-box;
+	.page-layout {
+		display: flex;
+		flex-direction: column;
+		min-height: 100vh;
 		width: 100%;
 	}
 
-	@media (min-width: 768px) {
-		.container {
-			padding: 2rem;
-		}
-	}
-
-	header {
-		text-align: center;
-		margin-bottom: 2rem;
+	.page-header {
+		background: white;
+		border-bottom: 1px solid #e0e0e0;
+		padding: 1.5rem 2rem;
 		position: relative;
 	}
 
 	.back-link {
-		position: absolute;
-		left: 0;
-		top: 0;
 		color: #667eea;
 		text-decoration: none;
 		font-weight: 500;
 		transition: color 0.2s;
+		display: inline-block;
+		margin-bottom: 1rem;
 	}
 
 	.back-link:hover {
 		color: #764ba2;
 	}
 
-	h1 {
+	.page-header h1 {
 		font-family: 'Cormorant Garamond', serif;
-		font-size: 3rem;
+		font-size: 2rem;
 		font-weight: 700;
-		margin: 0 0 0.5rem 0;
+		margin: 0 0 0.25rem 0;
 		color: #1a1a1a;
 	}
 
 	.subtitle {
-		font-size: 1.1rem;
+		font-size: 0.95rem;
 		color: #666;
 		margin: 0;
 	}
 
-	.status-bar {
-		background: white;
-		padding: 1rem;
-		border-radius: 8px;
-		margin-bottom: 2rem;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	}
-
-	.status-label {
-		font-weight: 600;
-		margin-right: 0.5rem;
-	}
-
-	.status-value {
-		color: #28a745;
-	}
-
-	.status-value.error {
-		color: #dc3545;
-	}
-
-	.error-message {
-		margin-top: 0.5rem;
-		padding: 0.5rem;
-		background: #f8d7da;
-		color: #721c24;
-		border-radius: 4px;
-		font-family: monospace;
-		font-size: 0.9rem;
-	}
-
-	.map-container {
-		background: white;
-		border-radius: 8px;
-		padding: 1rem;
-		margin-bottom: 2rem;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	.editor-layout {
 		display: flex;
-		justify-content: center;
-		align-items: center;
-		min-height: 70vh;
-		width: 100%;
-		box-sizing: border-box;
+		flex: 1;
 		overflow: hidden;
 	}
 
-	@media (min-width: 768px) {
-		.map-container {
-			padding: 2rem;
-		}
-	}
-
-	#map-svg {
-		width: 100%;
-		height: auto;
-		max-width: 100%;
-		max-height: 70vh;
-		border: 1px solid #e0e0e0;
-		box-sizing: border-box;
-	}
-
-	.info-panel {
+	.canvas-area {
+		flex: 1;
 		background: white;
-		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		padding: 2rem;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		overflow: auto;
 	}
 
-	.info-panel h2 {
+	.control-panel {
+		width: 360px;
+		background: white;
+		border-left: 1px solid #e0e0e0;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.panel-title {
 		font-family: 'Cormorant Garamond', serif;
 		font-size: 1.5rem;
-		margin-top: 0;
-		margin-bottom: 1rem;
-		color: #1a1a1a;
-	}
-
-	.info-panel h2:not(:first-child) {
-		margin-top: 2rem;
-	}
-
-	.info-panel ul {
-		list-style: none;
-		padding: 0;
+		font-weight: 600;
 		margin: 0;
+		padding: 1.5rem 1.5rem 1rem 1.5rem;
+		color: #1a1a1a;
+		border-bottom: 2px solid #f0f0f0;
 	}
 
-	.info-panel li {
-		padding: 0.5rem 0;
+	.control-section {
+		padding: 1rem;
 		border-bottom: 1px solid #f0f0f0;
 	}
 
-	.info-panel li:last-child {
-		border-bottom: none;
+	.info-section {
+		padding: 1.5rem;
+		background: #fafafa;
+		border-top: 1px solid #e0e0e0;
+		margin-top: auto;
 	}
 
-	strong {
+	.info-section h3 {
+		font-size: 0.875rem;
 		font-weight: 600;
+		margin: 0 0 1rem 0;
+		color: #333;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.person-info {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.875rem;
+		color: #555;
+		margin-bottom: 0.5rem;
+	}
+
+	.person-info:last-child {
+		margin-bottom: 0;
+	}
+
+	.person-dot {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		display: inline-block;
+		flex-shrink: 0;
+	}
+
+	/* Responsive layout for smaller screens */
+	@media (max-width: 1024px) {
+		.editor-layout {
+			flex-direction: column;
+		}
+
+		.control-panel {
+			width: 100%;
+			border-left: none;
+			border-top: 1px solid #e0e0e0;
+			max-height: 50vh;
+		}
+
+		.canvas-area {
+			min-height: 50vh;
+		}
 	}
 </style>
