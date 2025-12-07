@@ -11,7 +11,7 @@ import type { Job } from 'pg-boss';
 import { exportMapToPNG } from '$lib/export/puppeteer.js';
 import { embedSRGBProfile } from '$lib/export/post-process.js';
 import { validatePNG } from '$lib/export/validate.js';
-import { PRINT_SPECS } from '$lib/map-renderer/dimensions.js';
+import { findPrintSpec } from '$lib/map-renderer/dimensions.js';
 import type { MapDefinition } from '$lib/map-renderer/types.js';
 import fs from 'fs';
 import path from 'path';
@@ -34,9 +34,13 @@ export interface ExportJobData {
 		rotation?: [number, number, number];
 	};
 	printableMapData: {
-		pageSize: '12x16' | '18x24' | '24x36' | 'A3' | 'A4';
+		widthInches: number;
+		heightInches: number;
+		paperSizeName?: string;
 		projection?: string;
 		rotation?: [number, number, number];
+		zoom?: number;
+		pan?: [number, number];
 	};
 }
 
@@ -100,13 +104,19 @@ async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 		// 1. Tell API we're starting (API updates DB)
 		await callStartAPI(printJobId);
 
-		// 2. Get print spec
-		const printSpec = PRINT_SPECS[printableMapData.pageSize];
+		// 2. Get print spec by dimensions
+		const printSpec = findPrintSpec(printableMapData.widthInches, printableMapData.heightInches);
 		if (!printSpec) {
-			throw new Error(`Invalid page size: ${printableMapData.pageSize}`);
+			throw new Error(
+				`No print specification found for ${printableMapData.widthInches}×${printableMapData.heightInches} inches`
+			);
 		}
 
-		console.log(`📐 Page size: ${printableMapData.pageSize}`);
+		const orientation = printableMapData.widthInches > printableMapData.heightInches ? 'landscape' : 'portrait';
+		console.log(`📐 Page: ${printableMapData.widthInches}×${printableMapData.heightInches}" (${orientation})`);
+		if (printableMapData.paperSizeName) {
+			console.log(`   Size name: ${printableMapData.paperSizeName}`);
+		}
 		console.log(`🗺  Projection: ${printableMapData.projection || 'default'}`);
 
 		// 3. Build MapDefinition from job data
@@ -161,13 +171,18 @@ async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 				printJobId,
 				printableMapId,
 				exportedAt: new Date().toISOString(),
-				pageSize: printableMapData.pageSize,
+				pageDimensions: {
+					widthInches: printableMapData.widthInches,
+					heightInches: printableMapData.heightInches,
+					orientation,
+					paperSizeName: printableMapData.paperSizeName || 'Custom'
+				},
 				printSpec: {
-					name: printSpec.name,
-					widthInches: printSpec.widthInches,
-					heightInches: printSpec.heightInches,
+					productName: printSpec.productName,
+					trimWidthPt: printSpec.trimWidth,
+					trimHeightPt: printSpec.trimHeight,
 					dpi: printSpec.dpi,
-					bleedInches: printSpec.bleedInches,
+					bleedPt: printSpec.bleed,
 					pixelWidth: validation.metadata?.width,
 					pixelHeight: validation.metadata?.height
 				},

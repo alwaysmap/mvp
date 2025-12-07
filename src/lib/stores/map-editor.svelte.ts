@@ -13,6 +13,7 @@
 
 import type { PageSize } from '$lib/layout/types.js';
 import type { Person } from '$lib/map-renderer/types.js';
+import { ALL_STANDARD_SIZES, getDimensionsForOrientation } from '$lib/map-renderer/page-sizes.js';
 
 /**
  * Projection type for the map.
@@ -390,18 +391,50 @@ export function createMapEditorStore(initialState: Partial<EditorState> = {}) {
 			state.isExporting = true;
 
 			try {
-				// Determine orientation from page size
+				// Parse page size to get paper name and orientation
+				// Current format: '18x24' (portrait) or 'A4-landscape' or '24x18' (landscape)
 				const pageSize = state.page.size;
-				const [width, height] = pageSize.split('x').map(Number);
-				const orientation = !isNaN(width) && !isNaN(height) && width > height ? 'landscape' : 'portrait';
+				let paperSizeName: string;
+				let orientation: 'portrait' | 'landscape';
+
+				// Determine if this is landscape based on format
+				if (pageSize.endsWith('-landscape')) {
+					orientation = 'landscape';
+					paperSizeName = pageSize.replace('-landscape', '');
+				} else {
+					// For USA sizes, check if dimensions suggest landscape
+					const [width, height] = pageSize.split('x').map(Number);
+					if (!isNaN(width) && !isNaN(height) && width > height) {
+						orientation = 'landscape';
+						// Find the portrait version to get the paper name
+						paperSizeName = `${height}x${width}`;
+					} else if (!isNaN(width) && !isNaN(height)) {
+						orientation = 'portrait';
+						paperSizeName = pageSize;
+					} else {
+						// A-series portrait
+						orientation = 'portrait';
+						paperSizeName = pageSize;
+					}
+				}
+
+				// Find the standard page size
+				const standardSize = ALL_STANDARD_SIZES.find(s => s.name === paperSizeName);
+				if (!standardSize) {
+					throw new Error(`Unknown page size: ${paperSizeName}`);
+				}
+
+				// Get dimensions for the selected orientation
+				const dimensions = getDimensionsForOrientation(standardSize, orientation);
 
 				const response = await fetch('/api/export', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						userMapId: state.userMapId,
-						pageSize,
-						orientation,
+						widthInches: dimensions.widthInches,
+						heightInches: dimensions.heightInches,
+						paperSizeName: dimensions.paperSizeName,
 						projection: state.view.projection,
 						rotation: state.view.rotation,
 						zoom: state.view.zoom,

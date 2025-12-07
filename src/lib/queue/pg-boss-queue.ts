@@ -71,9 +71,13 @@ export async function addExportJob(printableMapId: string): Promise<string> {
 			rotation: userMap.data.rotation
 		},
 		printableMapData: {
-			pageSize: printableMap.data.pageSize,
+			widthInches: printableMap.data.widthInches,
+			heightInches: printableMap.data.heightInches,
+			paperSizeName: printableMap.data.paperSizeName,
 			projection: printableMap.data.projection,
-			rotation: printableMap.data.rotation
+			rotation: printableMap.data.rotation,
+			zoom: printableMap.data.zoom,
+			pan: printableMap.data.pan
 		}
 	};
 

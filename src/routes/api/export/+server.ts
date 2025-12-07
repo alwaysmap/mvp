@@ -9,7 +9,7 @@ import type { RequestHandler } from './$types';
 import { createPrintableMap } from '$lib/db/repositories/printable-maps';
 import { addExportJob } from '$lib/queue/pg-boss-queue.js';
 import type { PrintableMapData } from '$lib/db/schema';
-import { PRINT_SPECS } from '$lib/map-renderer/dimensions.js';
+import { findPrintSpec } from '$lib/map-renderer/dimensions.js';
 
 /**
  * POST /api/export
@@ -17,9 +17,10 @@ import { PRINT_SPECS } from '$lib/map-renderer/dimensions.js';
  * Request body:
  * {
  *   "userMapId": "uuid",
- *   "pageSize": "18x24",
- *   "orientation": "portrait",
- *   "projection": "orthographic", // optional
+ *   "widthInches": 18,             // required
+ *   "heightInches": 24,            // required
+ *   "paperSizeName": "18x24",      // optional display name
+ *   "projection": "orthographic",  // optional
  *   "rotation": [0, 0, 0],         // optional
  *   "zoom": 1,                     // optional
  *   "pan": [0, 0]                  // optional
@@ -43,15 +44,22 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Validate printable map data
 		const data = printableMapData as PrintableMapData;
-		if (!data.pageSize || !data.orientation) {
-			return json({ error: 'pageSize and orientation required' }, { status: 400 });
+		if (typeof data.widthInches !== 'number' || typeof data.heightInches !== 'number') {
+			return json({ error: 'widthInches and heightInches required as numbers' }, { status: 400 });
 		}
 
-		// Validate page size
-		if (!PRINT_SPECS[data.pageSize]) {
+		if (data.widthInches <= 0 || data.heightInches <= 0) {
+			return json({ error: 'widthInches and heightInches must be positive' }, { status: 400 });
+		}
+
+		// Find matching print spec by dimensions
+		const printSpec = findPrintSpec(data.widthInches, data.heightInches);
+		if (!printSpec) {
 			return json({
-				error: 'Invalid pageSize',
-				validSizes: Object.keys(PRINT_SPECS)
+				error: 'No matching print specification found',
+				widthInches: data.widthInches,
+				heightInches: data.heightInches,
+				message: 'Dimensions must match one of our supported print sizes'
 			}, { status: 400 });
 		}
 
@@ -91,17 +99,20 @@ export const GET: RequestHandler = async () => {
 				required: true,
 				description: 'ID of the user map to export'
 			},
-			pageSize: {
-				type: 'string',
+			widthInches: {
+				type: 'number',
 				required: true,
-				options: Object.keys(PRINT_SPECS),
-				description: 'Print size specification'
+				description: 'Page width in inches (e.g., 18 for portrait 18×24, or 24 for landscape)'
 			},
-			orientation: {
-				type: 'string',
+			heightInches: {
+				type: 'number',
 				required: true,
-				options: ['portrait', 'landscape'],
-				description: 'Page orientation'
+				description: 'Page height in inches (e.g., 24 for portrait 18×24, or 18 for landscape)'
+			},
+			paperSizeName: {
+				type: 'string',
+				required: false,
+				description: 'Optional display name (e.g., "18×24", "A4")'
 			},
 			projection: {
 				type: 'string',
@@ -120,8 +131,9 @@ export const GET: RequestHandler = async () => {
 		},
 		example: {
 			userMapId: 'abc123-...',
-			pageSize: '18x24',
-			orientation: 'portrait',
+			widthInches: 18,
+			heightInches: 24,
+			paperSizeName: '18×24',
 			projection: 'orthographic'
 		},
 		next: 'Poll /api/jobs/{jobId} for status'

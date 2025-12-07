@@ -85,8 +85,9 @@ describe('Export Workflow Integration', () => {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				userMapId,
-				pageSize: '18x24',
-				orientation: 'portrait',
+				widthInches: 18,
+				heightInches: 24,
+				paperSizeName: '18×24',
 				projection: 'orthographic',
 				rotation: [-20, -30, 0],
 				zoom: 1.0,
@@ -139,9 +140,12 @@ describe('Export Workflow Integration', () => {
 			expect(jobStatus).toBe('export_complete');
 			console.log(`✅ Export completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 
-			// Verify PNG file was created
-			const pngPath = path.join(EXPORT_DIR, `${printJobId}.png`);
-			expect(fs.existsSync(pngPath)).toBe(true);
+			// Verify PNG file was created (with timestamp prefix)
+			const files = fs.readdirSync(EXPORT_DIR);
+			const pngFile = files.find((f) => f.includes(printJobId) && f.endsWith('.png'));
+			expect(pngFile).toBeDefined();
+
+			const pngPath = path.join(EXPORT_DIR, pngFile!);
 
 			// Check file size (should be > 0)
 			const stats = fs.statSync(pngPath);

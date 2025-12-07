@@ -46,8 +46,9 @@ describe('Print Jobs Repository', () => {
 		};
 
 		const printableMapData: PrintableMapData = {
-			pageSize: '12x16',
-			orientation: 'landscape'
+			widthInches: 16,
+			heightInches: 12,
+			paperSizeName: '12×16'
 		};
 
 		const userMap = await createUserMap(userMapData);
@@ -206,8 +207,10 @@ describe('Print Jobs Repository', () => {
 		await startExport(job2.id); // This one is no longer pending
 
 		const readyJobs = await getJobsReadyForExport();
-		expect(readyJobs).toHaveLength(1);
-		expect(readyJobs[0].id).toBe(job1.id);
+		// Filter to only jobs for this test's printable map
+		const testReadyJobs = readyJobs.filter(j => j.printable_map_id === testPrintableMapId);
+		expect(testReadyJobs).toHaveLength(1);
+		expect(testReadyJobs[0].id).toBe(job1.id);
 	});
 
 	test('can get completed exports', async () => {

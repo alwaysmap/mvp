@@ -51,8 +51,9 @@ describe('MVP Workflow Integration Test', () => {
 	};
 
 	const samplePrintableData: PrintableMapData = {
-		pageSize: '18x24',
-		orientation: 'portrait',
+		widthInches: 18,
+		heightInches: 24,
+		paperSizeName: '18×24',
 		projection: 'orthographic',
 		rotation: [-20, -30, 0],
 		zoom: 1,
@@ -102,8 +103,8 @@ describe('MVP Workflow Integration Test', () => {
 		expect(printableMap).toBeDefined();
 		expect(printableMap.id).toBeDefined();
 		expect(printableMap.user_map_id).toBe(userMap.id);
-		expect(printableMap.data.pageSize).toBe('18x24');
-		expect(printableMap.data.orientation).toBe('portrait');
+		expect(printableMap.data.widthInches).toBe(18);
+		expect(printableMap.data.heightInches).toBe(24);
 		expect(printableMap.created_at).toBeInstanceOf(Date);
 	});
 
@@ -119,7 +120,8 @@ describe('MVP Workflow Integration Test', () => {
 		expect(combined?.userMap.id).toBe(userMap.id);
 		expect(combined?.printableMap.id).toBe(printableMap.id);
 		expect(combined?.userMap.data.title).toBe('Test Family Journey');
-		expect(combined?.printableMap.data.pageSize).toBe('18x24');
+		expect(combined?.printableMap.data.widthInches).toBe(18);
+		expect(combined?.printableMap.data.heightInches).toBe(24);
 	});
 
 	test('data integrity: JSONB fields preserve structure', async () => {

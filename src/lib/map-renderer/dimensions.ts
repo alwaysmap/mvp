@@ -286,3 +286,46 @@ export function pointsToPixels(points: number, dpi: number = 300): number {
 export function pixelsToPoints(pixels: number, dpi: number = 300): number {
 	return (pixels * 72) / dpi;
 }
+
+/**
+ * Finds a PrintSpec by exact width and height in inches.
+ *
+ * This function provides bulletproof page size lookup by using explicit dimensions
+ * instead of string parsing. Orientation is automatically determined by comparing
+ * width and height (landscape = width > height, portrait = width <= height).
+ *
+ * @param widthInches - Page width in inches
+ * @param heightInches - Page height in inches
+ * @returns PrintSpec if found, undefined otherwise
+ *
+ * @example
+ * ```typescript
+ * // Portrait 18x24
+ * findPrintSpec(18, 24) // → PRINT_SPECS['18x24']
+ *
+ * // Landscape 24x18 (same paper, rotated)
+ * findPrintSpec(24, 18) // → PRINT_SPECS['24x18']
+ *
+ * // A4 portrait (8.27 x 11.69 inches)
+ * findPrintSpec(8.27, 11.69) // → PRINT_SPECS['A4']
+ *
+ * // A4 landscape (11.69 x 8.27 inches)
+ * findPrintSpec(11.69, 8.27) // → PRINT_SPECS['A4-landscape']
+ * ```
+ */
+export function findPrintSpec(widthInches: number, heightInches: number): PrintSpec | undefined {
+	const widthPt = Math.round(widthInches * 72);
+	const heightPt = Math.round(heightInches * 72);
+
+	// Find spec with matching dimensions (within 1pt tolerance for rounding)
+	for (const spec of Object.values(PRINT_SPECS)) {
+		const widthMatch = Math.abs(spec.trimWidth - widthPt) <= 1;
+		const heightMatch = Math.abs(spec.trimHeight - heightPt) <= 1;
+
+		if (widthMatch && heightMatch) {
+			return spec;
+		}
+	}
+
+	return undefined;
+}

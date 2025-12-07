@@ -37,8 +37,9 @@ describe('Queue Initialization', () => {
 		};
 
 		const printableMapData: PrintableMapData = {
-			pageSize: '12x16',
-			orientation: 'landscape'
+			widthInches: 16,
+			heightInches: 12,
+			paperSizeName: '12×16'
 		};
 
 		const userMap = await createUserMap(userMapData);

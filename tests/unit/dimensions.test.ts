@@ -10,7 +10,8 @@ import {
 	inchesToPoints,
 	pointsToInches,
 	pointsToPixels,
-	pixelsToPoints
+	pixelsToPoints,
+	findPrintSpec
 } from '$lib/map-renderer/dimensions.js';
 
 describe('Dimension Calculations', () => {
@@ -165,6 +166,80 @@ describe('Dimension Calculations', () => {
 			expect(PRINT_SPECS['18x24'].dpi).toBe(300);
 			expect(PRINT_SPECS['24x36'].dpi).toBe(300);
 			expect(PRINT_SPECS['12x16'].dpi).toBe(300);
+		});
+	});
+
+	describe('findPrintSpec', () => {
+		it('should find USA portrait specs by dimensions', () => {
+			const spec18x24 = findPrintSpec(18, 24);
+			expect(spec18x24).toBeDefined();
+			expect(spec18x24?.trimWidth).toBe(18 * 72);
+			expect(spec18x24?.trimHeight).toBe(24 * 72);
+
+			const spec12x16 = findPrintSpec(12, 16);
+			expect(spec12x16).toBeDefined();
+			expect(spec12x16?.trimWidth).toBe(12 * 72);
+			expect(spec12x16?.trimHeight).toBe(16 * 72);
+		});
+
+		it('should find USA landscape specs by dimensions', () => {
+			// When user selects 18x24 in landscape, they want 24" wide x 18" tall
+			const spec24x18 = findPrintSpec(24, 18);
+			expect(spec24x18).toBeDefined();
+			expect(spec24x18?.trimWidth).toBe(24 * 72);
+			expect(spec24x18?.trimHeight).toBe(18 * 72);
+
+			const spec16x12 = findPrintSpec(16, 12);
+			expect(spec16x12).toBeDefined();
+			expect(spec16x12?.trimWidth).toBe(16 * 72);
+			expect(spec16x12?.trimHeight).toBe(12 * 72);
+		});
+
+		it('should find A-series portrait specs by dimensions', () => {
+			const specA4 = findPrintSpec(8.27, 11.69);
+			expect(specA4).toBeDefined();
+			expect(specA4?.productName).toContain('A4');
+			expect(specA4?.productName).toContain('Portrait');
+
+			const specA3 = findPrintSpec(11.69, 16.54);
+			expect(specA3).toBeDefined();
+			expect(specA3?.productName).toContain('A3');
+		});
+
+		it('should find A-series landscape specs by dimensions', () => {
+			const specA4Land = findPrintSpec(11.69, 8.27);
+			expect(specA4Land).toBeDefined();
+			expect(specA4Land?.productName).toContain('A4');
+			expect(specA4Land?.productName).toContain('Landscape');
+
+			const specA3Land = findPrintSpec(16.54, 11.69);
+			expect(specA3Land).toBeDefined();
+			expect(specA3Land?.productName).toContain('A3');
+			expect(specA3Land?.productName).toContain('Landscape');
+		});
+
+		it('should return undefined for invalid dimensions', () => {
+			expect(findPrintSpec(99, 99)).toBeUndefined();
+			expect(findPrintSpec(5, 7)).toBeUndefined();
+			expect(findPrintSpec(0, 0)).toBeUndefined();
+		});
+
+		it('should handle small rounding differences', () => {
+			// A4 is 8.27 x 11.69 inches, but slight rounding should still match
+			expect(findPrintSpec(8.268, 11.689)).toBeDefined();
+			expect(findPrintSpec(8.271, 11.691)).toBeDefined();
+		});
+
+		it('should distinguish between portrait and landscape', () => {
+			// 18x24 portrait vs 24x18 landscape should be different specs
+			const portrait = findPrintSpec(18, 24);
+			const landscape = findPrintSpec(24, 18);
+
+			expect(portrait).toBeDefined();
+			expect(landscape).toBeDefined();
+			expect(portrait).not.toBe(landscape);
+			expect(portrait?.trimWidth).toBe(18 * 72);
+			expect(landscape?.trimWidth).toBe(24 * 72);
 		});
 	});
 });

@@ -43,10 +43,17 @@ export interface UserMap {
 /**
  * Printable map configuration data
  * Stored in printable_maps table with JSONB data field
+ *
+ * Uses explicit widthInches and heightInches for bulletproof dimension handling.
+ * Orientation is derived: landscape = width > height, portrait = width <= height
+ *
+ * The paperSizeName field is optional and for display purposes only - it is NOT
+ * used for determining dimensions. Examples: 'A3', '18x24', 'US Letter', 'Custom'
  */
 export interface PrintableMapData {
-	pageSize: '12x16' | '18x24' | '24x36' | 'A3' | 'A4';
-	orientation: 'portrait' | 'landscape';
+	widthInches: number;
+	heightInches: number;
+	paperSizeName?: string;  // Display name only, e.g. 'A3', '18x24', 'Custom'
 	style?: 'vintage' | 'modern';
 	showBoundary?: boolean;
 	projection?: 'orthographic' | 'equirectangular' | 'mercator' | 'naturalEarth1' | 'robinson';
