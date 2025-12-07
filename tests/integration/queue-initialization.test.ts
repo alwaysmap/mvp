@@ -6,7 +6,7 @@
  * tests might miss.
  */
 
-import { describe, test, expect, afterAll } from 'vitest';
+import { describe, test, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { getPgBoss, stopPgBoss } from '../../src/lib/queue/pg-boss-queue.js';
 import { createUserMap } from '../../src/lib/db/repositories/user-maps.js';
 import { createPrintableMap } from '../../src/lib/db/repositories/printable-maps.js';

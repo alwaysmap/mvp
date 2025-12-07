@@ -126,29 +126,11 @@ test.describe('Export Pipeline', () => {
 		expect(data.example).toBeDefined();
 	});
 
-	test('export API rejects request without map definition', async ({ request }) => {
-		const response = await request.post('/api/export', {
-			data: {}
-		});
-
-		expect(response.ok()).toBe(false);
-		expect(response.status()).toBe(400);
-
-		const data = await response.json();
-		expect(data.error).toContain('Missing mapDefinition');
-	});
-
-	test('export API rejects invalid map definition', async ({ request }) => {
-		const invalidMapDef = {
-			// Missing required fields
-			title: '',
-			subtitle: '',
-			people: []
-		};
-
+	test('export API rejects request without userMapId', async ({ request }) => {
 		const response = await request.post('/api/export', {
 			data: {
-				mapDefinition: invalidMapDef
+				pageSize: '18x24',
+				orientation: 'portrait'
 			}
 		});
 
@@ -156,16 +138,14 @@ test.describe('Export Pipeline', () => {
 		expect(response.status()).toBe(400);
 
 		const data = await response.json();
-		expect(data.error).toContain('Invalid map definition');
-		expect(data.details).toBeDefined();
-		expect(Array.isArray(data.details)).toBe(true);
+		expect(data.error).toContain('userMapId required');
 	});
 
-	test('export API rejects invalid print size', async ({ request }) => {
+	test('export API rejects missing required fields', async ({ request }) => {
 		const response = await request.post('/api/export', {
 			data: {
-				mapDefinition: sampleMapDefinition,
-				printSize: 'invalid-size'
+				userMapId: 'test-id'
+				// Missing pageSize and orientation
 			}
 		});
 
@@ -173,7 +153,23 @@ test.describe('Export Pipeline', () => {
 		expect(response.status()).toBe(400);
 
 		const data = await response.json();
-		expect(data.error).toContain('Invalid print size');
+		expect(data.error).toContain('pageSize and orientation required');
+	});
+
+	test('export API rejects invalid page size', async ({ request }) => {
+		const response = await request.post('/api/export', {
+			data: {
+				userMapId: 'test-id',
+				pageSize: 'invalid-size',
+				orientation: 'portrait'
+			}
+		});
+
+		expect(response.ok()).toBe(false);
+		expect(response.status()).toBe(400);
+
+		const data = await response.json();
+		expect(data.error).toContain('Invalid pageSize');
 		expect(data.validSizes).toBeDefined();
 	});
 });

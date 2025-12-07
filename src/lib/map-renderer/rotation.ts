@@ -28,6 +28,7 @@ export function createRotationDrag(
 		const coords = projection.invert?.([event.x, event.y]);
 		if (!coords) return;
 
+		// @ts-expect-error - versor properties exist but type definition doesn't resolve correctly
 		v0 = versor.cartesian(coords);
 		r0 = projection.rotate() as Rotation;
 		q0 = versor(r0);
@@ -38,15 +39,19 @@ export function createRotationDrag(
 		const coords = projection.rotate(r0).invert?.([event.x, event.y]);
 		if (!coords) return;
 
+		// @ts-expect-error - versor properties exist but type definition doesn't resolve correctly
 		const v1 = versor.cartesian(coords);
 
 		// Compute rotation quaternion from v0 to v1
+		// @ts-expect-error - versor properties exist but type definition doesn't resolve correctly
 		const delta = versor.delta(v0, v1);
 
 		// Compose with initial rotation
+		// @ts-expect-error - versor properties exist but type definition doesn't resolve correctly
 		const q1 = versor.multiply(q0, delta);
 
 		// Convert back to Euler angles and update projection
+		// @ts-expect-error - versor properties exist but type definition doesn't resolve correctly
 		const rotation = versor.rotation(q1);
 		projection.rotate(rotation);
 

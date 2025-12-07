@@ -92,6 +92,7 @@ describe('Page Size Specifications', () => {
 					},
 					mapPlacement: {
 						aspectRatio: 1.0,
+						fillStrategy: 'maximize',
 						zoomAdjustment: 1.0
 					},
 					furniture: {

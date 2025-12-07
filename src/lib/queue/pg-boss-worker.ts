@@ -7,6 +7,7 @@
  */
 
 import { PgBoss } from 'pg-boss';
+import type { Job } from 'pg-boss';
 import { exportMapToPNG } from '$lib/export/puppeteer.js';
 import { embedSRGBProfile } from '$lib/export/post-process.js';
 import { validatePNG } from '$lib/export/validate.js';
@@ -88,7 +89,7 @@ async function callFailAPI(printJobId: string, error: string): Promise<void> {
 /**
  * Process a single export job
  */
-async function processExportJob(job: PgBoss.Job<ExportJobData>): Promise<void> {
+async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 	const startTime = Date.now();
 	const { printJobId, printableMapId, userMapData, printableMapData } = job.data;
 
@@ -109,8 +110,8 @@ async function processExportJob(job: PgBoss.Job<ExportJobData>): Promise<void> {
 
 		// 3. Build MapDefinition from job data
 		const mapDefinition: MapDefinition = {
-			title: userMapData.title,
-			subtitle: userMapData.subtitle,
+			title: userMapData.title || 'Untitled Map',
+			subtitle: userMapData.subtitle || '',
 			people: userMapData.people,
 			rotation: printableMapData.rotation || userMapData.rotation || [-20, -30, 0]
 		};
@@ -139,7 +140,7 @@ async function processExportJob(job: PgBoss.Job<ExportJobData>): Promise<void> {
 			fs.mkdirSync(EXPORT_DIR, { recursive: true });
 		}
 
-		const filename = `${printableMapId}.png`;
+		const filename = `${printJobId}.png`;
 		const filePath = path.join(EXPORT_DIR, filename);
 		fs.writeFileSync(filePath, processed);
 
@@ -182,7 +183,7 @@ export async function createPgBossWorker() {
 
 	const boss = new PgBoss(connectionString);
 
-	boss.on('error', (error) => {
+	boss.on('error', (error: Error) => {
 		console.error('pg-boss error:', error);
 	});
 
@@ -190,7 +191,11 @@ export async function createPgBossWorker() {
 	console.log('✅ pg-boss started');
 
 	// Register worker for export jobs
-	await boss.work('export-map', processExportJob);
+	await boss.work('export-map', async (jobs: Job<ExportJobData>[]) => {
+		for (const job of jobs) {
+			await processExportJob(job);
+		}
+	});
 	console.log('🔄 Export worker registered and listening for jobs');
 
 	return boss;

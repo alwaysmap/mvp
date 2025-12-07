@@ -220,8 +220,10 @@
 						.append('path')
 						.datum(lineData)
 						.attr('class', `path-outline person-${person.id}`)
-						.attr('d', (d) => {
-							const projected = d.map((coord) => projection(coord) || [0, 0]);
+						.attr('d', (d: [number, number][]) => {
+							const projected = d.map(
+								(coord: [number, number]) => projection(coord) || ([0, 0] as [number, number])
+							) as [number, number][];
 							return lineGenerator(projected);
 						})
 						.call(stylePathOutline);
@@ -231,8 +233,10 @@
 						.append('path')
 						.datum(lineData)
 						.attr('class', `path person-${person.id}`)
-						.attr('d', (d) => {
-							const projected = d.map((coord) => projection(coord) || [0, 0]);
+						.attr('d', (d: [number, number][]) => {
+							const projected = d.map(
+								(coord: [number, number]) => projection(coord) || ([0, 0] as [number, number])
+							) as [number, number][];
 							return lineGenerator(projected);
 						})
 						.call(stylePath, color);

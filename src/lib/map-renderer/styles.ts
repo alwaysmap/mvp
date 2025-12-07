@@ -172,7 +172,7 @@ export function stylePath(selection: any, color: string): void {
 export function stylePathOutline(selection: any): void {
 	selection
 		.attr('fill', 'none')
-		.attr('stroke', colors.background)
+		.attr('stroke', '#ffffff')
 		.attr('stroke-width', strokeWidths.pathOutline)
 		.attr('stroke-linecap', 'round')
 		.attr('stroke-linejoin', 'round')
@@ -189,6 +189,6 @@ export function styleMarker(selection: any, color: string): void {
 	selection
 		.attr('r', 4)
 		.attr('fill', color)
-		.attr('stroke', colors.background)
+		.attr('stroke', '#ffffff')
 		.attr('stroke-width', 1.5);
 }

@@ -330,7 +330,7 @@ describe('Map Definition Validation', () => {
 		});
 
 		it('rejects rotation with Infinity', () => {
-			const mapDef = {
+			const mapDef: MapDefinition = {
 				...validMapDefinition,
 				rotation: [0, Infinity, 0]
 			};

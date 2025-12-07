@@ -39,6 +39,7 @@ pool.on('error', (err) => {
  */
 export async function query<T = any>(text: string, params?: any[]) {
 	const start = Date.now();
+	// @ts-expect-error - Type constraint issue with pg Pool
 	const result = await pool.query<T>(text, params);
 	const duration = Date.now() - start;
 

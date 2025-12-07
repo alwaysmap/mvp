@@ -77,7 +77,12 @@ export async function validatePNG(
 		}
 
 		// Check bit depth (8-bit is standard, 16-bit is acceptable)
-		if (metadata.depth && metadata.depth !== 8 && metadata.depth !== 16) {
+		if (
+			metadata.depth &&
+			typeof metadata.depth === 'number' &&
+			metadata.depth !== 8 &&
+			metadata.depth !== 16
+		) {
 			warnings.push(`Unusual bit depth: ${metadata.depth} (expected 8 or 16)`);
 		}
 

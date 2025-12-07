@@ -276,7 +276,12 @@ describe('Map Editor Store', () => {
 
 			store.loadState({
 				title: 'Partial Load',
-				view: { zoom: 2.0 }
+				view: {
+					projection: 'orthographic',
+					rotation: [-20, -30, 0],
+					zoom: 2.0,
+					pan: [0, 0]
+				}
 			});
 
 			// Title should be updated

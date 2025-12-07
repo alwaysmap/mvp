@@ -7,8 +7,8 @@ test.describe('Responsive Layout', () => {
 		await page.goto('/create-map');
 
 		// Wait for render
-		const statusValue = page.locator('.status-value');
-		await expect(statusValue).toHaveText('Render complete!', { timeout: 10000 });
+		const svg = page.locator('.map-canvas');
+		await expect(svg).toBeVisible({ timeout: 10000 });
 
 		// Check for horizontal scroll
 		const hasHorizontalScroll = await page.evaluate(() => {
@@ -24,8 +24,8 @@ test.describe('Responsive Layout', () => {
 		await page.goto('/create-map');
 
 		// Wait for render
-		const statusValue = page.locator('.status-value');
-		await expect(statusValue).toHaveText('Render complete!', { timeout: 10000 });
+		const svg = page.locator('.map-canvas');
+		await expect(svg).toBeVisible({ timeout: 10000 });
 
 		// Check for horizontal scroll
 		const hasHorizontalScroll = await page.evaluate(() => {
@@ -41,8 +41,8 @@ test.describe('Responsive Layout', () => {
 		await page.goto('/create-map');
 
 		// Wait for render
-		const statusValue = page.locator('.status-value');
-		await expect(statusValue).toHaveText('Render complete!', { timeout: 10000 });
+		const svg = page.locator('.map-canvas');
+		await expect(svg).toBeVisible({ timeout: 10000 });
 
 		// Check for horizontal scroll
 		const hasHorizontalScroll = await page.evaluate(() => {
@@ -57,12 +57,12 @@ test.describe('Responsive Layout', () => {
 		await page.goto('/create-map');
 
 		// Wait for render
-		const statusValue = page.locator('.status-value');
-		await expect(statusValue).toHaveText('Render complete!', { timeout: 10000 });
+		const svg = page.locator('.map-canvas');
+		await expect(svg).toBeVisible({ timeout: 10000 });
 
-		// Get map container dimensions
-		const mapContainer = page.locator('.map-container');
-		const bbox = await mapContainer.boundingBox();
+		// Get canvas area dimensions
+		const canvasArea = page.locator('.canvas-area');
+		const bbox = await canvasArea.boundingBox();
 
 		expect(bbox).toBeTruthy();
 		if (bbox) {

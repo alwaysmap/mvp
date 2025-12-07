@@ -56,7 +56,7 @@ export async function exportMapToPNG(
 
 		// Launch browser with optimized settings
 		browser = await puppeteer.launch({
-			headless: 'new',
+			headless: true,
 			args: [
 				'--font-render-hinting=none', // Disable font hinting for print quality
 				'--force-color-profile=srgb', // Force sRGB color profile
@@ -143,9 +143,13 @@ export async function exportMapToPNG(
 			omitBackground: false // Include background color
 		});
 
-		console.log('✓ Screenshot captured:', Buffer.byteLength(screenshot), 'bytes');
+		console.log(
+			'✓ Screenshot captured:',
+			Buffer.byteLength(screenshot as Buffer),
+			'bytes'
+		);
 
-		return screenshot;
+		return screenshot as Buffer;
 	} catch (error) {
 		console.error('✗ Export failed:', error);
 		throw error;

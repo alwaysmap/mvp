@@ -39,8 +39,8 @@ We will spend that innovation budget on core features of AlwaysMap that require 
 
 ## How to Work
 
-- Always run tests after making changes to prove things work, and address what is broken.
-- Use language- or platform-specific tooling before writing custom ones.
+- Always run *all* tests after making changes to prove things work, and address what is broken.
+- Use language- or platform-specific tooling before writing custom ones, e.g., `svelte-check` for Svelte (see `pnpm run build`).
   For example, if Vitest will work and we're already using Vite, don't include a bunch of other dependencies for testing.
 - Structure the project and the code for readability and maintainability.
   - Write idiomatic code.
@@ -48,15 +48,18 @@ We will spend that innovation budget on core features of AlwaysMap that require 
   - Write testable, functionally pure code where it makes sense.
   - Manage and mutate state in one place, not multiple places.
   - Create small, atomic changes not sprawling big changes unless there's no alternative.
-  - Relentlessly simplify: spaghetti code is not acceptable. 
+  - Relentlessly simplify: spaghetti code is not acceptable.
+- Write implementation plans for each major chunk of work before starting to code.
+  Put that document in the `docs` folder with a reasonable name like `PHASE_X_PLAN.md`.
 
 ## Absolute Rules
 
 These are rules that you must **never** violate:
 
-- **Do not** ask the user to confirm with manual testing. Use Playwright instead.
-- **Do not** say that you have fixed a bug or addressed an issue until you have first proved that the bug exists in a reproducible way.
-- **Do not** create one-off artifacts like a 'quick script in the /tmp directory' because those tend not to be rigorous.
-- **Do** carefully assess requests to ensure that you understand the request in enough detail to act precisely.
-- **Do not** push changes to remote git repos without asking first.
+- **Never** ask the user to confirm with manual testing. Use Playwright instead.
+- **Never** assert that you have fixed a bug or addressed an issue until you have first proved that the bug exists in a reproducible way.
+- **Never** create one-off artifacts like a 'quick script in the /tmp directory' because those tend not to be rigorous.
+- **Always** carefully assess requests to ensure that you understand the request in enough detail to act precisely.
+- **Never** commit code to git until you have run *all* tests and they *all* pass.
+- **Never** push changes to remote git repos without asking first.
 - **Always** understand the entire system before attempting to change that system: it's very easy to miss existing implementations.

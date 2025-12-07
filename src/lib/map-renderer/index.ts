@@ -187,7 +187,7 @@ export async function renderMap(
 		console.log('✓ Migration paths rendered:', mapDef.people.length, 'people');
 
 		// Step 7.5: Enable interactive rotation if requested
-		if (options.interactive && projection.rotate) {
+		if (options.interactive && typeof projection.rotate === 'function') {
 			const drag = createRotationDrag(projection, (rotation) => {
 				// Re-render geography and paths on rotation
 				svg.selectAll('.ocean, .graticule, .land, .countries, .migration-paths').remove();
@@ -330,8 +330,10 @@ function renderMigrationPaths(
 					.append('path')
 					.datum(lineData)
 					.attr('class', `path-outline person-${person.id}`)
-					.attr('d', (d) => {
-						const projected = d.map((coord) => projection(coord) || [0, 0]);
+					.attr('d', (d: [number, number][]) => {
+						const projected = d.map(
+							(coord: [number, number]) => projection(coord) || ([0, 0] as [number, number])
+						) as [number, number][];
 						return lineGenerator(projected);
 					})
 					.call(stylePathOutline);
@@ -341,8 +343,10 @@ function renderMigrationPaths(
 					.append('path')
 					.datum(lineData)
 					.attr('class', `path person-${person.id}`)
-					.attr('d', (d) => {
-						const projected = d.map((coord) => projection(coord) || [0, 0]);
+					.attr('d', (d: [number, number][]) => {
+						const projected = d.map(
+							(coord: [number, number]) => projection(coord) || ([0, 0] as [number, number])
+						) as [number, number][];
 						return lineGenerator(projected);
 					})
 					.call(stylePath, color);

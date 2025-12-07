@@ -6,6 +6,18 @@
 import type { PageLayout } from '../layout/types.js';
 
 /**
+ * Projection type for the map.
+ * - orthographic: 3D globe view
+ * - equirectangular, mercator, naturalEarth1, robinson: flat map projections
+ */
+export type ProjectionType =
+	| 'orthographic'
+	| 'equirectangular'
+	| 'mercator'
+	| 'naturalEarth1'
+	| 'robinson';
+
+/**
  * Represents a person's location at a specific point in time.
  */
 export interface Location {

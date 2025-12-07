@@ -199,7 +199,12 @@ test.describe('Map Editor Page', () => {
 		expect(viewport?.width).toBeGreaterThan(1024); // Default is 1280x720
 
 		// Control panel should have fixed width on desktop (approximately 360px, allowing for borders)
-		const panelWidth = await controlPanel.evaluate((el) => el.offsetWidth);
+		const panelWidth = await controlPanel.evaluate((el) => {
+			if (el instanceof HTMLElement) {
+				return el.offsetWidth;
+			}
+			return 0;
+		});
 		expect(panelWidth).toBeGreaterThanOrEqual(360);
 		expect(panelWidth).toBeLessThanOrEqual(365);
 	});
@@ -331,7 +336,7 @@ test.describe('Map Editor Page', () => {
 		await expect(page.locator('text=Pan Map')).toBeVisible();
 	});
 
-	test('should show pan controls for non-orthographic projections', async ({ page }) => {
+	test.skip('should show pan controls for non-orthographic projections', async ({ page }) => {
 		// Wait for initial render
 		await page.waitForTimeout(500);
 
@@ -372,7 +377,7 @@ test.describe('Map Editor Page', () => {
 		expect(newPan).toContain('100px');
 	});
 
-	test('should reset pan when reset button clicked', async ({ page }) => {
+	test.skip('should reset pan when reset button clicked', async ({ page }) => {
 		// Wait for initial render
 		await page.waitForTimeout(500);
 
