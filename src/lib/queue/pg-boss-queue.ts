@@ -5,7 +5,7 @@
  * Used by API endpoints to create print jobs and queue them.
  */
 
-import PgBoss from 'pg-boss';
+import { PgBoss } from 'pg-boss';
 import { createPrintJob } from '$lib/db/repositories/print-jobs.js';
 import { getPrintableMapWithUserMap } from '$lib/db/repositories/printable-maps.js';
 import type { ExportJobData } from './pg-boss-worker.js';

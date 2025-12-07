@@ -6,7 +6,7 @@
  * Runs in separate container (Dockerfile.worker).
  */
 
-import PgBoss from 'pg-boss';
+import { PgBoss } from 'pg-boss';
 import { exportMapToPNG } from '$lib/export/puppeteer.js';
 import { embedSRGBProfile } from '$lib/export/post-process.js';
 import { validatePNG } from '$lib/export/validate.js';
