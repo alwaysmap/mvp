@@ -88,11 +88,17 @@ async function updatePrintJobState(
 /**
  * Transition: pending_export -> exporting
  * Called when worker starts processing
+ * IDEMPOTENT: If already exporting, returns current job without error
  */
 export async function startExport(printJobId: string): Promise<PrintJob> {
 	const job = await getPrintJob(printJobId);
 	if (!job) {
 		throw new Error(`Print job ${printJobId} not found`);
+	}
+
+	// Idempotent: already in target state, return current job
+	if (job.state === 'exporting') {
+		return job;
 	}
 
 	if (job.state !== 'pending_export') {
@@ -111,11 +117,24 @@ export async function startExport(printJobId: string): Promise<PrintJob> {
 /**
  * Transition: exporting -> export_complete
  * Called when worker successfully completes export
+ * IDEMPOTENT: If already export_complete with same filePath, returns current job
  */
 export async function completeExport(printJobId: string, filePath: string): Promise<PrintJob> {
 	const job = await getPrintJob(printJobId);
 	if (!job) {
 		throw new Error(`Print job ${printJobId} not found`);
+	}
+
+	// Idempotent: already completed with same file
+	if (job.state === 'export_complete' && job.export_file_path === filePath) {
+		return job;
+	}
+
+	// Reject if already completed with different file (data mismatch - not safe to be idempotent)
+	if (job.state === 'export_complete' && job.export_file_path !== filePath) {
+		throw new Error(
+			`Job already completed with different file: ${job.export_file_path} vs ${filePath}`
+		);
 	}
 
 	if (job.state !== 'exporting') {
@@ -137,11 +156,30 @@ export async function completeExport(printJobId: string, filePath: string): Prom
 /**
  * Transition: exporting -> export_failed
  * Called when worker encounters an error
+ * IDEMPOTENT: If already failed with same error, returns current job
+ *             If already failed with different error, updates error and increments retry count
  */
 export async function failExport(printJobId: string, error: string): Promise<PrintJob> {
 	const job = await getPrintJob(printJobId);
 	if (!job) {
 		throw new Error(`Print job ${printJobId} not found`);
+	}
+
+	// Idempotent: already failed with same error
+	if (job.state === 'export_failed' && job.export_error === error) {
+		return job;
+	}
+
+	// Already failed with different error - update error and increment retry count
+	if (job.state === 'export_failed' && job.export_error !== error) {
+		const updatedJob = await updatePrintJobState(printJobId, 'export_failed', {
+			export_error: error,
+			export_retry_count: job.export_retry_count + 1
+		});
+
+		await logPrintJobEvent(printJobId, 'export_failed', 'export_failed', 'failed', undefined, error);
+
+		return updatedJob;
 	}
 
 	if (job.state !== 'exporting') {

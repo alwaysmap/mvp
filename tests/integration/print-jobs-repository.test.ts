@@ -123,12 +123,15 @@ describe('Print Jobs Repository', () => {
 		expect(events[1].to_state).toBe('exporting');
 	});
 
-	test('cannot start export from wrong state', async () => {
+	test('cannot start export from wrong state (except idempotent case)', async () => {
 		const printJob = await createPrintJob(testPrintableMapId);
 		await startExport(printJob.id);
+		await completeExport(printJob.id, '/test.png');
 
-		// Try to start again - should fail
-		await expect(startExport(printJob.id)).rejects.toThrow('Cannot start export from state exporting');
+		// Try to start from completed state - should fail (not idempotent)
+		await expect(startExport(printJob.id)).rejects.toThrow(
+			'Cannot start export from state export_complete'
+		);
 	});
 
 	test('can transition from exporting to export_complete', async () => {
