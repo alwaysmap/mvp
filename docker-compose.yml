@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: awm-postgres
+    environment:
+      POSTGRES_DB: alwaysmap
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     ports:
@@ -10,12 +29,20 @@ services:
       - ./static:/app/static
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: alwaysmap
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
       GCS_BUCKET: family-maps
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
       PRINTFUL_API_KEY: ${PRINTFUL_API_KEY}
     command: pnpm dev --host 0.0.0.0
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   worker:
     build:
@@ -23,17 +50,38 @@ services:
       dockerfile: Dockerfile.worker
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: alwaysmap
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
       GCS_BUCKET: family-maps
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-credentials.json
       PRINTFUL_API_KEY: ${PRINTFUL_API_KEY}
       RENDER_BASE_URL: http://app:5173
     volumes:
       - ./gcp-credentials.json:/app/gcp-credentials.json:ro
+      - ./exports:/app/exports
     depends_on:
-      - app
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      app:
+        condition: service_started
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
