@@ -6,7 +6,6 @@
  */
 
 import { Pool } from 'pg';
-import { dev } from '$app/environment';
 
 // Database configuration from environment
 const config = {
@@ -23,8 +22,9 @@ const config = {
 // Create connection pool
 export const pool = new Pool(config);
 
-// Log connection info in development
-if (dev) {
+// Log connection info in development (check NODE_ENV instead of $app/environment)
+const isDev = process.env.NODE_ENV !== 'production';
+if (isDev) {
 	console.log(`📊 Database: ${config.user}@${config.host}:${config.port}/${config.database}`);
 }
 
@@ -42,7 +42,8 @@ export async function query<T = any>(text: string, params?: any[]) {
 	const result = await pool.query<T>(text, params);
 	const duration = Date.now() - start;
 
-	if (dev) {
+	// Only log if DEBUG_SQL is set (too verbose otherwise)
+	if (process.env.DEBUG_SQL === 'true') {
 		console.log(`🔍 Query executed in ${duration}ms`, { text, rows: result.rowCount });
 	}
 
