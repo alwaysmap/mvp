@@ -1,0 +1,74 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "← Back to Home" [ref=e5] [cursor=pointer]:
+      - /url: /
+    - heading "Map Editor" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Interactive map preview with live controls
+  - generic [ref=e8]:
+    - img [ref=e10]:
+      - generic [ref=e31]: "Print Area: 18x24"
+    - complementary [ref=e32]:
+      - heading "Controls" [level=2] [ref=e33]
+      - generic [ref=e35]:
+        - heading "Map View" [level=3] [ref=e36]
+        - generic [ref=e37]:
+          - button "Globe view" [ref=e38] [cursor=pointer]: Globe
+          - button "Flat map view" [ref=e39] [cursor=pointer]: Flat Map
+      - generic [ref=e41]:
+        - heading "Print Size" [level=3] [ref=e42]
+        - generic [ref=e43]:
+          - generic [ref=e44]: Paper Size
+          - combobox "Paper Size" [ref=e45] [cursor=pointer]:
+            - option "8x10"
+            - option "12x16"
+            - option "18x24" [selected]
+            - option "24x36"
+            - option "A4"
+            - option "A3"
+            - option "A2"
+            - option "A1"
+        - generic [ref=e46]:
+          - generic [ref=e47]: Orientation
+          - generic [ref=e48]:
+            - button "Portrait orientation" [ref=e49] [cursor=pointer]: Portrait
+            - button "Landscape orientation" [ref=e50] [cursor=pointer]: Landscape
+        - generic [ref=e51] [cursor=pointer]:
+          - checkbox "Show Print Boundary" [checked] [ref=e52]
+          - generic [ref=e53]: Show Print Boundary
+      - generic [ref=e55]:
+        - heading "Zoom" [level=3] [ref=e56]
+        - generic [ref=e57]: 100%
+        - generic [ref=e58]:
+          - button "Zoom out" [ref=e59] [cursor=pointer]:
+            - generic [ref=e60]: −
+          - button "Reset zoom" [ref=e61] [cursor=pointer]:
+            - generic [ref=e62]: ⊙
+          - button "Zoom in" [ref=e63] [cursor=pointer]:
+            - generic [ref=e64]: +
+        - slider "Zoom level" [ref=e65]: "100"
+      - generic [ref=e67]:
+        - heading "Globe Rotation" [level=3] [ref=e68]
+        - generic [ref=e69]:
+          - generic [ref=e70]:
+            - generic [ref=e71]: Longitude
+            - generic [ref=e72]: "-20°"
+          - slider "Rotate longitude" [ref=e73]: "-20"
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]: Latitude
+            - generic [ref=e77]: "-30°"
+          - slider "Rotate latitude" [ref=e78]: "-30"
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - generic [ref=e81]: Roll
+            - generic [ref=e82]: 0°
+          - slider "Rotate roll" [ref=e83]: "0"
+        - button "Reset Rotation" [ref=e84] [cursor=pointer]
+      - generic [ref=e86]:
+        - heading "Sample Data" [level=3] [ref=e87]
+        - generic [ref=e90]: "Alice: NY → London → Tokyo"
+        - generic [ref=e93]: "Bob: Toronto → Paris → Sydney"
+```

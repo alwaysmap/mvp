@@ -58,6 +58,9 @@ export async function addExportJob(printableMapId: string): Promise<string> {
 	// 3. Queue job with pg-boss
 	const boss = await getPgBoss();
 
+	// Ensure queue exists (pg-boss requirement)
+	await boss.createQueue('export-map');
+
 	const jobData: ExportJobData = {
 		printJobId: printJob.id,
 		printableMapId: printableMap.id,
