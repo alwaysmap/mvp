@@ -13,3 +13,4 @@ gcp-credentials.json
 
 # Export outputs
 *.png
+test-results/
