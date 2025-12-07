@@ -212,24 +212,32 @@ await updatePrintJob(printJobId, {
 - Add new tables
 - CLI creates both `printable_map` and `print_job` together
 
-## Questions for Review
+## Decisions (Approved)
 
-1. **Reprints**: In the future, should one `printable_map` have multiple `print_jobs`? (User pays again for same config)
-   - If yes: Remove UNIQUE constraint on `print_job.printable_map_id`
-   - If no: Keep it
+1. **Reprints**: ✅ YES - Remove UNIQUE constraint on `print_job.printable_map_id`
+   - Same config can be printed multiple times
+   - Each reprint creates new `print_job`
 
-2. **State names**: Good with `pending_export`, `exporting`, `export_complete`, `ordering`, `ordered`, `fulfilled`?
+2. **State names**: ✅ APPROVED - `pending_export`, `exporting`, `export_complete`, `ordering`, `ordered`, `fulfilled`
 
-3. **Retry limits**: Should there be a max retry count in DB or just in CLI logic?
+3. **Retry limits**: ✅ CLI logic with exponential backoff
+   - CLI handles retry strategy
+   - DB tracks retry count for observability
+   - Hard fail after reasonable attempts
 
-4. **Payment**: Should `print_jobs` track payment status too, or separate `orders` table later?
+4. **Payment**: ✅ DEFERRED - Not in MVP scope
+   - Focus: Does web → DB → printable PNG work?
+   - Payment integration later
 
-5. **Postgres vs Redis for saga**: Use Postgres FOR UPDATE locking (simpler) or Redis distributed lock (more complex)?
+5. **Postgres vs Redis**: ✅ POSTGRES ONLY
+   - Use Postgres FOR UPDATE locking
+   - No Redis distributed locks (unnecessary complexity)
+   - Redis only for BullMQ job queue
 
-## Recommendation
+## Implementation Approach
 
-**Use Postgres-based saga:**
-- Simpler (already have Postgres)
+**Postgres-based saga:**
+- Simple (already have Postgres)
 - FOR UPDATE provides row-level locking
 - ACID transactions for state changes
 - Audit log in same database
