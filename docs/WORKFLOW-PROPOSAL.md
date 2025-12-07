@@ -229,19 +229,28 @@ await updatePrintJob(printJobId, {
    - Focus: Does web → DB → printable PNG work?
    - Payment integration later
 
-5. **Postgres vs Redis**: ✅ POSTGRES ONLY
-   - Use Postgres FOR UPDATE locking
-   - No Redis distributed locks (unnecessary complexity)
-   - Redis only for BullMQ job queue
+5. **Postgres vs Redis**: ✅ POSTGRES ONLY with pg-boss
+   - Use Postgres FOR UPDATE locking for state
+   - **Replace BullMQ with pg-boss** for job queue
+   - No Redis needed at all
+   - Everything in one database
 
 ## Implementation Approach
 
-**Postgres-based saga:**
-- Simple (already have Postgres)
-- FOR UPDATE provides row-level locking
-- ACID transactions for state changes
-- Audit log in same database
-- Redis only for BullMQ job queue
+**Postgres-only with pg-boss:**
+- **Job queue:** pg-boss (Postgres-native, replaces BullMQ + Redis)
+- **State machine:** Postgres FOR UPDATE row-level locking
+- **Transactions:** ACID guarantees for state changes
+- **Audit log:** Same database as jobs and state
+- **Simplicity:** One database for everything (Postgres)
+
+### Why pg-boss?
+- Production-proven (hey.com uses it for millions of jobs/day)
+- Uses Postgres `SKIP LOCKED` for exactly-once delivery
+- Built-in retry logic, dead letter queues
+- TypeScript support
+- Same database as `print_jobs` table - no Redis to manage
+- Simple migration from BullMQ (similar API)
 
 **Next Steps if Approved:**
 1. Write migration `002_add_print_jobs.sql`

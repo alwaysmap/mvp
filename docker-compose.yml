@@ -28,7 +28,6 @@ services:
       - ./src:/app/src
       - ./static:/app/static
     environment:
-      REDIS_URL: redis://redis:6379
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: alwaysmap
@@ -41,15 +40,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
     environment:
-      REDIS_URL: redis://redis:6379
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_NAME: alwaysmap
@@ -65,23 +61,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
       app:
         condition: service_started
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 volumes:
   postgres_data:
-  redis_data:
