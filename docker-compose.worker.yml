@@ -1,0 +1,76 @@
+# Docker Compose for AWM Worker (Separate Machine Setup)
+#
+# This compose file runs ONLY the worker service, proving that the worker
+# can run on a completely separate machine from the API/web server.
+#
+# Requirements:
+# - API server running somewhere accessible (e.g., http://host.docker.internal:5173)
+# - PostgreSQL database accessible from worker
+# - Shared export directory (can be NFS, S3, or local mount)
+#
+# Usage:
+#   docker-compose -f docker-compose.worker.yml up --build
+
+version: '3.8'
+
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: awm-worker
+    environment:
+      # Database connection (required)
+      - DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/alwaysmap
+      
+      # API URL for the worker to call /api/jobs/{id}/start, /complete, /fail
+      # Use host.docker.internal to reach host machine on Docker Desktop
+      - API_URL=http://host.docker.internal:5173
+      
+      # Base URL for Puppeteer to render pages
+      # This is where Puppeteer fetches /render?id=xxx
+      - RENDER_BASE_URL=http://host.docker.internal:5173
+      
+      # Export directory (mounted as volume)
+      - EXPORT_DIR=/app/exports
+      
+      # Node environment
+      - NODE_ENV=production
+    
+    volumes:
+      # Mount exports directory to persist generated files
+      # In production, this could be NFS, S3, or other shared storage
+      - ./exports:/app/exports
+    
+    networks:
+      - awm-network
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check (optional - checks if worker is responsive)
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "pnpm worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  awm-network:
+    driver: bridge
+
+# Notes:
+# 
+# For production deployment on a separate machine:
+# 1. Change host.docker.internal to actual API server hostname/IP
+# 2. Use proper database connection string with authentication
+# 3. Mount exports to shared storage (NFS, S3, etc.)
+# 4. Add resource limits (CPU, memory) for the worker
+# 5. Configure logging and monitoring
+# 
+# Example production environment variables:
+#   DATABASE_URL=postgresql://user:pass@db.prod.example.com:5432/alwaysmap
+#   API_URL=https://api.alwaysmap.com
+#   RENDER_BASE_URL=https://app.alwaysmap.com
+#   EXPORT_DIR=/mnt/nfs/exports

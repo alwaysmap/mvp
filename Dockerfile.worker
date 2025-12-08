@@ -1,41 +1,84 @@
+# Dockerfile for AWM Export Worker
+#
+# This creates a minimal Docker image for running the export worker on a separate machine.
+# The worker only needs:
+# - Node.js runtime
+# - Puppeteer dependencies for headless Chrome
+# - Network access to API and database
+# - Volume mount for export output directory
+
 FROM node:20-slim
 
-# Install Chromium and dependencies
+# Install Puppeteer dependencies for headless Chrome
+# This is the absolute minimum needed for Puppeteer to work
 RUN apt-get update && apt-get install -y \
-    chromium \
+    # Chrome dependencies
+    ca-certificates \
     fonts-liberation \
-    fonts-noto-core \
-    --no-install-recommends \
+    libappindicator3-1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libc6 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libexpat1 \
+    libfontconfig1 \
+    libgbm1 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libstdc++6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+    lsb-release \
+    wget \
+    xdg-utils \
+    # Additional dependencies
     && rm -rf /var/lib/apt/lists/*
 
-# Install custom fonts (will fail until fonts are added - that's OK for now)
-COPY static/fonts/*.ttf /usr/local/share/fonts/ 2>/dev/null || echo "Fonts not yet added"
+# Enable corepack for pnpm
+RUN corepack enable
 
-# Rebuild font cache
-RUN fc-cache -f -v
-
-# Puppeteer configuration
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-
-# Enable pnpm
-RUN corepack enable pnpm
-
+# Create app directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better layer caching
 COPY package.json pnpm-lock.yaml ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod=false
 
-# Copy sRGB ICC profile
-COPY profiles/ ./profiles/
-
-# Copy source files
+# Copy application source
 COPY . .
 
-# Build the application
+# Build the application (TypeScript → JavaScript)
 RUN pnpm build
 
-CMD ["node", "build/lib/queue/worker.js"]
+# Create exports directory
+RUN mkdir -p /app/exports
+
+# Set environment variable defaults (can be overridden at runtime)
+ENV DATABASE_URL=""
+ENV API_URL="http://localhost:5173"
+ENV RENDER_BASE_URL="http://localhost:5173"
+ENV EXPORT_DIR="/app/exports"
+ENV NODE_ENV="production"
+
+# Run the worker
+CMD ["pnpm", "worker"]

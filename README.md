@@ -222,9 +222,13 @@ awm-prototype/
 │       ├── rotation.test.ts
 │       ├── responsive.test.ts
 │       └── export.test.ts
-├── docker-compose.yml   # Multi-container development stack
+├── docker-compose.yml       # Multi-container development stack
+├── docker-compose.worker.yml  # Standalone worker (separate machine)
 ├── Dockerfile           # App container
-└── Dockerfile.worker    # Puppeteer worker container
+├── Dockerfile.worker    # Puppeteer worker container
+└── docs/
+    ├── WORKER-DOCKER-SETUP.md      # Docker worker deployment guide
+    └── NATIVE-UNITS-REFACTOR.md    # Future refactor spec
 ```
 
 ## Technology Stack
@@ -295,6 +299,34 @@ if (result.success) {
 }
 ```
 
+## Docker Deployment
+
+The project includes Docker setup for running the full stack (app + worker + database):
+
+```bash
+# Start all services
+docker compose up
+
+# View worker logs
+docker compose logs -f worker
+
+# Stop all services
+docker compose down
+```
+
+### Architecture
+
+- **App Container**: SvelteKit application + API server
+- **Worker Container**: Puppeteer export worker with headless Chrome
+- **Postgres Container**: PostgreSQL database for pg-boss queue
+
+The worker runs independently and only communicates via:
+- API endpoints (job status updates)
+- PostgreSQL database (pg-boss queue)
+- Shared volume (PNG file exports)
+
+For detailed worker deployment instructions (including running on a separate machine), see [docs/WORKER-DOCKER-SETUP.md](docs/WORKER-DOCKER-SETUP.md).
+
 ## Next Steps (Phase 4+)
 
 Future enhancements for production readiness:
@@ -314,6 +346,8 @@ Future enhancements for production readiness:
 - [Implementation Plan](IMPLEMENTATION-PLAN.md) - Complete 5-phase roadmap
 - [POC Specification](alwaysmap-poc.md) - Original detailed spec
 - [Project Guidelines](CLAUDE.md) - Development standards
+- [Docker Worker Setup](docs/WORKER-DOCKER-SETUP.md) - Worker deployment guide
+- [Native Units Refactor](docs/NATIVE-UNITS-REFACTOR.md) - Future enhancement spec
 
 ## Commands Reference
 
@@ -336,8 +370,9 @@ pnpm test:e2e         # Run E2E tests
 pnpm test:e2e:ui      # E2E tests with UI
 
 # Docker
-docker-compose up     # Start all services
-docker-compose build  # Rebuild containers
+docker compose up     # Start all services (app + worker + postgres)
+docker compose build  # Rebuild containers
+docker compose logs worker  # View worker logs
 
 # Assets
 ./scripts/download-assets.sh  # Re-download all assets
