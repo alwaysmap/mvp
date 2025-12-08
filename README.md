@@ -51,6 +51,10 @@ Framework-agnostic map renderer:
 # Install dependencies
 pnpm install
 
+# (Optional) Set up environment variables for Docker
+cp .env.example .env
+# Edit .env with your API keys (see docs/ENVIRONMENT-VARIABLES.md)
+
 # Run development server
 pnpm dev
 
@@ -350,6 +354,7 @@ Future enhancements for production readiness:
 
 ## Documentation
 
+- [Environment Variables](docs/ENVIRONMENT-VARIABLES.md) - **Secrets management & runtime injection**
 - [Testing Strategy](docs/TESTING-STRATEGY.md) - **12-Factor App testing & Cloud Run validation**
 - [Docker Worker Setup](docs/WORKER-DOCKER-SETUP.md) - Worker deployment guide
 - [Implementation Plan](IMPLEMENTATION-PLAN.md) - Complete 5-phase roadmap
