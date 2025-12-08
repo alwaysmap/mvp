@@ -21,7 +21,6 @@
 	import type { MapEditorStore } from '$lib/stores/map-editor.svelte';
 	import { PRINT_SPECS } from '$lib/map-renderer/dimensions';
 	import {
-		colors,
 		styleLand,
 		styleCountries,
 		styleGraticule,
@@ -30,6 +29,7 @@
 		styleMarker,
 		getPersonColor
 	} from '$lib/map-renderer/styles';
+	import { getTheme } from '$lib/map-renderer/themes';
 
 	// Props
 	interface Props {
@@ -78,6 +78,9 @@
 	function renderMap() {
 		if (!svgElement || !landData || !countriesData) return;
 
+		// Get theme from store (TODO: add theme to store state)
+		const theme = getTheme();
+
 		const svg = d3.select(svgElement);
 		svg.selectAll('*').remove();
 
@@ -86,18 +89,18 @@
 			.attr('width', width)
 			.attr('height', height)
 			.attr('viewBox', `0 0 ${width} ${height}`)
-			.style('background-color', colors.canvasBackground);
+			.style('background-color', theme.colors.canvasBackground);
 
 		// Create projection based on current state
 		const projection = createProjection();
 		const path = d3.geoPath(projection);
 
 		// Render geography
-		renderGeography(svg, path);
+		renderGeography(svg, path, theme);
 
 		// Render migration paths
 		if (store.state.people.length > 0) {
-			renderMigrationPaths(svg, projection);
+			renderMigrationPaths(svg, projection, theme);
 		}
 
 		// Render page boundary if enabled
@@ -151,7 +154,8 @@
 	 */
 	function renderGeography(
 		svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
-		path: d3.GeoPath
+		path: d3.GeoPath,
+		theme: ReturnType<typeof getTheme>
 	) {
 		const graticule = d3.geoGraticule10();
 
@@ -163,7 +167,7 @@
 				.attr('cx', width / 2)
 				.attr('cy', height / 2)
 				.attr('r', (Math.min(width, height) / 2) * 0.85 * store.state.view.zoom)
-				.attr('fill', colors.ocean);
+				.attr('fill', theme.colors.ocean);
 		}
 
 		// Render graticule
@@ -172,18 +176,23 @@
 			.datum(graticule)
 			.attr('class', 'graticule')
 			.attr('d', path)
-			.call(styleGraticule);
+			.call(styleGraticule, theme);
 
 		// Render land
 		const land = feature(landData as Topology, landData.objects.land as GeometryCollection);
-		svg.append('path').datum(land).attr('class', 'land').attr('d', path).call(styleLand);
+		svg.append('path').datum(land).attr('class', 'land').attr('d', path).call(styleLand, theme);
 
 		// Render country borders
 		const countries = feature(
 			countriesData as Topology,
 			countriesData.objects.countries as GeometryCollection
 		);
-		svg.append('path').datum(countries).attr('class', 'countries').attr('d', path).call(styleCountries);
+		svg
+			.append('path')
+			.datum(countries)
+			.attr('class', 'countries')
+			.attr('d', path)
+			.call(styleCountries, theme);
 	}
 
 	/**
@@ -191,12 +200,13 @@
 	 */
 	function renderMigrationPaths(
 		svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
-		projection: d3.GeoProjection
+		projection: d3.GeoProjection,
+		theme: ReturnType<typeof getTheme>
 	) {
 		const pathsGroup = svg.append('g').attr('class', 'migration-paths');
 
 		store.state.people.forEach((person, personIndex) => {
-			const color = getPersonColor(personIndex, person.color);
+			const color = getPersonColor(personIndex, theme, person.color);
 
 			// Create line segments between consecutive locations
 			for (let i = 0; i < person.locations.length - 1; i++) {

@@ -13,6 +13,11 @@ import { embedSRGBProfile } from '$lib/export/post-process.js';
 import { validatePNG } from '$lib/export/validate.js';
 import { findPrintSpec } from '$lib/map-renderer/dimensions.js';
 import type { MapDefinition } from '$lib/map-renderer/types.js';
+import {
+	createSuccessLog,
+	createFailureLog,
+	type JobContext
+} from '$lib/queue/error-handling.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -97,6 +102,18 @@ async function callFailAPI(printJobId: string, error: string): Promise<void> {
 async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 	const startTime = Date.now();
 	const { printJobId, printableMapId, userMapData, printableMapData } = job.data;
+
+	// Create job context for structured logging
+	const jobContext: JobContext = {
+		printJobId,
+		printableMapId,
+		attemptNumber: (job as any).attemptsMade || 0,
+		maxAttempts: (job as any).retryLimit || 3,
+		queuedAt: (job as any).createdOn || new Date().toISOString(),
+		startedAt: new Date().toISOString()
+	};
+
+	console.log(`[JOB_START] ${JSON.stringify(jobContext)}`);
 
 	try {
 		console.log(`📋 Processing export job ${printJobId} for printable map: ${printableMapId}`);
@@ -213,6 +230,14 @@ async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 		const durationMs = Date.now() - startTime;
 		const fileSizeMB = (Buffer.byteLength(processed) / 1024 / 1024).toFixed(2);
 
+		// Log success with structured data
+		const successLog = createSuccessLog(jobContext, {
+			durationMs,
+			filePath,
+			fileSizeMB
+		});
+		console.log(`[JOB_SUCCESS] ${JSON.stringify(successLog)}`);
+
 		console.log(`✅ Export completed in ${(durationMs / 1000).toFixed(2)}s`);
 		console.log(`   File: ${filePath}`);
 		console.log(`   Size: ${fileSizeMB} MB`);
@@ -224,17 +249,34 @@ async function processExportJob(job: Job<ExportJobData>): Promise<void> {
 		const durationMs = Date.now() - startTime;
 		const errorMessage = error instanceof Error ? error.message : String(error);
 
+		// Create structured failure log with error classification
+		const failureLog = createFailureLog(jobContext, error, durationMs);
+		console.error(`[JOB_FAILED] ${JSON.stringify(failureLog)}`);
+
 		console.error(`❌ Export failed: ${errorMessage}`);
 
 		// 9. Tell API we failed (API updates DB)
 		try {
 			await callFailAPI(printJobId, errorMessage);
 		} catch (apiError) {
+			// If this is a fatal error (job not found in DB), don't retry
+			if (failureLog.isFatal) {
+				console.warn(
+					`⚠️  Job ${printJobId} not in database (likely deleted), completing without retry`
+				);
+				// Return without throwing - let pg-boss mark as complete
+				return;
+			}
 			console.error(`⚠️  Failed to update API with error status:`, apiError);
 		}
 
-		// Re-throw so pg-boss can handle retry
-		throw error;
+		// Only retry for transient errors (non-fatal)
+		if (!failureLog.isFatal) {
+			throw error; // pg-boss will retry
+		}
+
+		// Fatal errors: logged above, exit cleanly without retry
+		console.error(`💀 Fatal error - job ${printJobId} will not retry`);
 	}
 }
 

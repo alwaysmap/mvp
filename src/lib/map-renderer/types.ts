@@ -57,6 +57,8 @@ export interface MapDefinition {
 	people: Person[];
 	/** Initial rotation of the globe [lambda, phi, gamma] in degrees */
 	rotation?: [number, number, number];
+	/** Theme ID (e.g., 'antique-parchment', 'cool-blue'). If not provided, uses default theme. */
+	theme?: string;
 	/**
 	 * Optional page layout configuration.
 	 * If not provided, uses default layout with hardcoded positioning (legacy behavior).

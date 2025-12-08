@@ -29,27 +29,74 @@
 		});
 	});
 
-	// Derive current base size and orientation from store
-	const currentBaseSize = $derived(() => {
-		const current = store.state.page.size;
-		if (current.endsWith('-landscape')) {
-			return current.replace('-landscape', '');
+	/**
+	 * Convert a base size and orientation to the correct PageSize key.
+	 * USA sizes: flip dimensions (18x24 → 24x18)
+	 * A-series: add suffix (A4 → A4-landscape)
+	 */
+	function toPageSize(baseSize: string, landscape: boolean): PageSize {
+		if (!landscape) {
+			return baseSize as PageSize;
 		}
-		return current;
-	});
 
-	const isLandscape = $derived(store.state.page.size.endsWith('-landscape'));
+		// A-series: add "-landscape" suffix
+		if (baseSize.startsWith('A')) {
+			return `${baseSize}-landscape` as PageSize;
+		}
+
+		// USA sizes: flip dimensions (18x24 → 24x18)
+		const [width, height] = baseSize.split('x');
+		return `${height}x${width}` as PageSize;
+	}
+
+	/**
+	 * Extract base size from current page size (reverse of toPageSize).
+	 * Examples:
+	 * - "18x24" → "18x24"
+	 * - "24x18" → "18x24" (flipped back to portrait)
+	 * - "A4-landscape" → "A4"
+	 */
+	function fromPageSize(pageSize: PageSize): { baseSize: string; landscape: boolean } {
+		// A-series landscape
+		if (pageSize.endsWith('-landscape')) {
+			return {
+				baseSize: pageSize.replace('-landscape', ''),
+				landscape: true
+			};
+		}
+
+		// USA portrait
+		const portraitSizes = ['8x10', '12x16', '18x24', '24x36'];
+		if (portraitSizes.includes(pageSize)) {
+			return { baseSize: pageSize, landscape: false };
+		}
+
+		// USA landscape (24x18 → 18x24)
+		const landscapeSizes = ['10x8', '16x12', '24x18', '36x24'];
+		if (landscapeSizes.includes(pageSize)) {
+			const [width, height] = pageSize.split('x');
+			return { baseSize: `${height}x${width}`, landscape: true };
+		}
+
+		// A-series portrait
+		return { baseSize: pageSize, landscape: false };
+	}
+
+	// Derive current base size and orientation from store
+	const currentState = $derived(() => fromPageSize(store.state.page.size));
+	const currentBaseSize = $derived(() => currentState().baseSize);
+	const isLandscape = $derived(currentState().landscape);
 
 	// Update page size when dropdown or orientation changes
 	function handleSizeChange(baseSize: string) {
-		const newSize = isLandscape ? `${baseSize}-landscape` : baseSize;
-		store.setPageSize(newSize as PageSize);
+		const newSize = toPageSize(baseSize, isLandscape);
+		store.setPageSize(newSize);
 	}
 
 	function setOrientation(landscape: boolean) {
 		const baseSize = currentBaseSize();
-		const newSize = landscape ? `${baseSize}-landscape` : baseSize;
-		store.setPageSize(newSize as PageSize);
+		const newSize = toPageSize(baseSize, landscape);
+		store.setPageSize(newSize);
 	}
 </script>
 

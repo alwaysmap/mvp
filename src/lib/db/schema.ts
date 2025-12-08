@@ -27,7 +27,7 @@ export interface UserMapData {
 	}>;
 	projection?: 'orthographic' | 'equirectangular' | 'mercator' | 'naturalEarth1' | 'robinson';
 	rotation?: [number, number, number];
-	style?: 'vintage' | 'modern';
+	theme?: string; // Theme ID (e.g., 'antique-parchment', 'cool-blue')
 }
 
 /**

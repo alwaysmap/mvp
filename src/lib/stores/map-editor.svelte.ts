@@ -13,7 +13,8 @@
 
 import type { PageSize } from '$lib/layout/types.js';
 import type { Person } from '$lib/map-renderer/types.js';
-import { ALL_STANDARD_SIZES, getDimensionsForOrientation } from '$lib/map-renderer/page-sizes.js';
+import { getDimensionsForOrientation } from '$lib/map-renderer/page-sizes.js';
+import { findPageSize } from '$lib/map-renderer/page-size-utils.js';
 
 /**
  * Projection type for the map.
@@ -418,8 +419,8 @@ export function createMapEditorStore(initialState: Partial<EditorState> = {}) {
 					}
 				}
 
-				// Find the standard page size
-				const standardSize = ALL_STANDARD_SIZES.find(s => s.name === paperSizeName);
+				// Find the standard page size using the helper (handles normalization)
+				const standardSize = findPageSize(paperSizeName);
 				if (!standardSize) {
 					throw new Error(`Unknown page size: ${paperSizeName}`);
 				}

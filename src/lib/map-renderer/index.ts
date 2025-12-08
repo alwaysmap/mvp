@@ -20,7 +20,6 @@ import { createProjection, createGeoPath } from './projection.js';
 import { renderTitleBox, renderQRCode, renderAttribution } from './overlays.js';
 import { createRotationDrag } from './rotation.js';
 import {
-	colors,
 	styleLand,
 	styleCountries,
 	styleGraticule,
@@ -29,6 +28,7 @@ import {
 	styleMarker,
 	getPersonColor
 } from './styles.js';
+import { getTheme } from './themes.js';
 import { calculateLayout } from '../layout/index.js';
 import type { UserMapData } from '../layout/types.js';
 
@@ -73,6 +73,10 @@ export async function renderMap(
 	options: RenderOptions = {}
 ): Promise<RenderResult> {
 	try {
+		// Step 0: Get theme
+		const theme = getTheme(mapDef.theme);
+		console.log('✓ Theme loaded:', theme.name);
+
 		// Step 1: Wait for fonts to load (browser only)
 		let fontStatuses;
 		try {
@@ -131,7 +135,7 @@ export async function renderMap(
 			.attr('width', dimensions.totalWidth)
 			.attr('height', dimensions.totalHeight)
 			.attr('viewBox', `0 0 ${dimensions.totalWidth} ${dimensions.totalHeight}`)
-			.style('background-color', options.backgroundColor || colors.canvasBackground);
+			.style('background-color', options.backgroundColor || theme.colors.canvasBackground);
 
 		// Step 4.5: Calculate layout if provided
 		let layoutResult;
@@ -172,7 +176,7 @@ export async function renderMap(
 			const data = await loadGeographicData();
 			landData = data.landData;
 			countriesData = data.countriesData;
-			renderGeography(svg, path, landData, countriesData);
+			renderGeography(svg, path, landData, countriesData, theme);
 			console.log('✓ Geography rendered');
 		} catch (error) {
 			const errorMsg =
@@ -183,7 +187,7 @@ export async function renderMap(
 		}
 
 		// Step 7: Render migration paths
-		renderMigrationPaths(svg, mapDef.people, projection);
+		renderMigrationPaths(svg, mapDef.people, projection, theme);
 		console.log('✓ Migration paths rendered:', mapDef.people.length, 'people');
 
 		// Step 7.5: Enable interactive rotation if requested
@@ -191,8 +195,8 @@ export async function renderMap(
 			const drag = createRotationDrag(projection, (rotation) => {
 				// Re-render geography and paths on rotation
 				svg.selectAll('.ocean, .graticule, .land, .countries, .migration-paths').remove();
-				renderGeography(svg, path, landData, countriesData);
-				renderMigrationPaths(svg, mapDef.people, projection);
+				renderGeography(svg, path, landData, countriesData, theme);
+				renderMigrationPaths(svg, mapDef.people, projection, theme);
 			});
 
 			svg.call(drag as any);
@@ -266,7 +270,8 @@ function renderGeography(
 	svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>,
 	path: d3.GeoPath,
 	landData: any,
-	countriesData: any
+	countriesData: any,
+	theme: ReturnType<typeof getTheme>
 ): void {
 	// Create graticule (latitude/longitude grid)
 	const graticule = d3.geoGraticule10();
@@ -278,21 +283,31 @@ function renderGeography(
 		.attr('cx', path.centroid({ type: 'Sphere' })[0])
 		.attr('cy', path.centroid({ type: 'Sphere' })[1])
 		.attr('r', (path.projection() as any).scale())
-		.attr('fill', colors.ocean);
+		.attr('fill', theme.colors.ocean);
 
 	// Render graticule
-	svg.append('path').datum(graticule).attr('class', 'graticule').attr('d', path).call(styleGraticule);
+	svg
+		.append('path')
+		.datum(graticule)
+		.attr('class', 'graticule')
+		.attr('d', path)
+		.call(styleGraticule, theme);
 
 	// Render land
 	const land = feature(landData as Topology, landData.objects.land as GeometryCollection);
-	svg.append('path').datum(land).attr('class', 'land').attr('d', path).call(styleLand);
+	svg.append('path').datum(land).attr('class', 'land').attr('d', path).call(styleLand, theme);
 
 	// Render country borders
 	const countries = feature(
 		countriesData as Topology,
 		countriesData.objects.countries as GeometryCollection
 	);
-	svg.append('path').datum(countries).attr('class', 'countries').attr('d', path).call(styleCountries);
+	svg
+		.append('path')
+		.datum(countries)
+		.attr('class', 'countries')
+		.attr('d', path)
+		.call(styleCountries, theme);
 }
 
 /**
@@ -301,12 +316,13 @@ function renderGeography(
 function renderMigrationPaths(
 	svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>,
 	people: MapDefinition['people'],
-	projection: d3.GeoProjection
+	projection: d3.GeoProjection,
+	theme: ReturnType<typeof getTheme>
 ): void {
 	const pathsGroup = svg.append('g').attr('class', 'migration-paths');
 
 	people.forEach((person, personIndex) => {
-		const color = getPersonColor(personIndex, person.color);
+		const color = getPersonColor(personIndex, theme, person.color);
 
 		// Create line segments between consecutive locations
 		for (let i = 0; i < person.locations.length - 1; i++) {
