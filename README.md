@@ -57,9 +57,16 @@ pnpm dev
 # Export map to PNG (no server needed!)
 pnpm export --sample output.png
 
-# Run tests
-pnpm test          # Unit tests (Vitest)
-pnpm test:e2e      # E2E tests (Playwright)
+# Run tests (see docs/TESTING-STRATEGY.md for details)
+pnpm test              # Unit tests (local, fast)
+pnpm test:integration  # Integration tests (Docker)
+pnpm test:e2e          # E2E tests (Docker)
+pnpm test:all          # All tests (unit + Docker)
+
+# Docker testing (validates Cloud Run deployment)
+pnpm docker:up         # Start containers
+pnpm docker:logs       # View all logs
+pnpm docker:down       # Stop containers
 
 # Build for production
 pnpm build
@@ -343,10 +350,11 @@ Future enhancements for production readiness:
 
 ## Documentation
 
+- [Testing Strategy](docs/TESTING-STRATEGY.md) - **12-Factor App testing & Cloud Run validation**
+- [Docker Worker Setup](docs/WORKER-DOCKER-SETUP.md) - Worker deployment guide
 - [Implementation Plan](IMPLEMENTATION-PLAN.md) - Complete 5-phase roadmap
 - [POC Specification](alwaysmap-poc.md) - Original detailed spec
 - [Project Guidelines](CLAUDE.md) - Development standards
-- [Docker Worker Setup](docs/WORKER-DOCKER-SETUP.md) - Worker deployment guide
 - [Native Units Refactor](docs/NATIVE-UNITS-REFACTOR.md) - Future enhancement spec
 
 ## Commands Reference
@@ -363,16 +371,22 @@ pnpm export data/map.json output.png         # Export from JSON file
 pnpm export --sample output.png --size 24x36 # Specify print size
 pnpm export --help                           # Show help
 
-# Testing
-pnpm test             # Run all unit tests
-pnpm test:watch       # Watch mode for unit tests
-pnpm test:e2e         # Run E2E tests
-pnpm test:e2e:ui      # E2E tests with UI
+# Testing (see docs/TESTING-STRATEGY.md)
+pnpm test                # Unit tests (local, fast)
+pnpm test:watch          # Watch mode for TDD
+pnpm test:integration    # Integration tests (requires Docker)
+pnpm test:e2e            # E2E tests (requires Docker)
+pnpm test:e2e:ui         # E2E with Playwright UI
+pnpm test:all            # All tests (unit + Docker)
+pnpm test:docker         # Integration + E2E in Docker
 
-# Docker
-docker compose up     # Start all services (app + worker + postgres)
-docker compose build  # Rebuild containers
-docker compose logs worker  # View worker logs
+# Docker (validates Cloud Run deployment)
+pnpm docker:up           # Start all services (app + worker + postgres)
+pnpm docker:down         # Stop all services
+pnpm docker:logs         # View all container logs
+pnpm docker:logs:worker  # View worker logs only
+docker compose build     # Rebuild containers
+docker compose up --scale worker=3  # Test horizontal scaling
 
 # Assets
 ./scripts/download-assets.sh  # Re-download all assets
